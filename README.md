@@ -23,3 +23,6 @@
 
 ## Ссылки
 - note2cms: https://github.com/mortalezz/note2cms
+
+## License
+MIT License
