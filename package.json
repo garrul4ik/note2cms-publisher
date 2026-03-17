@@ -1,0 +1,16 @@
+{
+  "name": "note2cms-obsidian-plugin",
+  "version": "1.0.0",
+  "description": "Publish Obsidian notes to note2cms",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.js",
+    "build": "node esbuild.config.js production"
+  },
+  "devDependencies": {
+    "esbuild": "^0.16.10",
+    "obsidian": "^1.1.1",
+    "typescript": "^4.9.4",
+    "@types/node": "^18.11.9"
+  }
+}

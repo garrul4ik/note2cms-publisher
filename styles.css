@@ -1,0 +1,17 @@
+
+.note2cms-preview-container {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+  background: var(--background-secondary);
+  max-height: 400px;
+  overflow-y: auto;
+}
+.note2cms-queue-table { width: 100%; border-collapse: collapse; }
+.note2cms-queue-table th, .note2cms-queue-table td {
+  padding: 8px; text-align: left; border-bottom: 1px solid var(--background-modifier-border);
+}
+.note2cms-status-pending { color: var(--text-warning); }
+.note2cms-status-success { color: var(--text-success); }
+.note2cms-status-failed { color: var(--text-error); }
