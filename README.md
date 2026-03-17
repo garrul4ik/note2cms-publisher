@@ -1,41 +1,45 @@
 # note2cms Publisher
 
-Плагин для публикации заметок в note2cms. Делает статический блог (GitHub Pages) и работает с Leapcell backend. Поддерживает Desktop и Android.
+**One-click publishing from Obsidian to note2cms**
 
-## Возможности
-- Публикация текущей заметки и публикация любой заметки по команде
-- Предпросмотр с кнопкой Publish для любой заметки
-- Массовая публикация из папки Publish или по тегу `#publish`
-- Автопубликация при изменении файлов (опционально)
-- Очередь для оффлайн/WiFi-only и кнопка очистки очереди
-- Перманентная ссылка после публикации + кнопка Copy Link
-- Список опубликованных постов с поиском и удалением
-- Подтверждение на мобильных
+Publish your notes directly to your static blog (GitHub Pages / Cloudflare Pages) powered by note2cms backend.
 
-## Установка (локально)
-1. `npm install`
-2. `npm run build`
-3. Скопируйте `main.js`, `manifest.json`, `styles.css` в `.obsidian/plugins/note2cms-publisher/`
+Works on **Desktop** and **Android** (and iOS).
 
-## Настройка
-1. Установи плагин
-2. Перейди в Settings → note2cms Publisher
-3. Введи API URL и Token из твоего Leapcell деплоя
+### Features
 
-## Команды
-- Publish current note
-- Publish current note (any)
-- Preview note
-- Bulk publish
-- Manage published posts
+- Publish current note with one click (ribbon icon + command)
+- Bulk publish from folder or by `#publish` tag
+- Automatic title injection if missing
+- Offline queue + WiFi-only mode
+- Confirmation dialog on mobile
+- Permalink is automatically added back to frontmatter
+- Preview before publishing
+- Clean and simple settings
 
-## Примечания
-- Для GitHub Pages деплоя на стороне note2cms требуется валидный `GITHUB_TOKEN` и `GITHUB_REPO`.
-- Если включена проверка `title`, плагин автоматически добавляет `title` в frontmatter перед публикацией.
+### Installation
 
-## Ссылки
-- note2cms: https://github.com/mortalezz/note2cms
+**Recommended way (after approval):**
+- Go to **Settings → Community plugins → Browse** and search for "note2cms Publisher"
 
-## License
-MIT License
+**Temporary way (until approved):**
+- Install **BRAT** plugin
+- In BRAT: `Add Beta plugin` → enter `garrul4ik/note2cms-publisher`
 
+### Setup
+
+1. Open **Settings → note2cms Publisher**
+2. Enter your note2cms API URL (e.g. `https://your-service.leapcell.dev`)
+3. Paste your API Token
+4. (Optional) Set publish folder and enable features
+
+Ready to publish!
+
+### Links
+
+- Backend: [note2cms](https://github.com/mortalezz/note2cms)
+- Report issues: [GitHub Issues](https://github.com/garrul4ik/note2cms-publisher/issues)
+
+---
+
+Made with ❤️ for Obsidian users who want full control over their blog.
