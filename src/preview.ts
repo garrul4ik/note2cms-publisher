@@ -22,7 +22,7 @@ export class PreviewModal extends Modal {
     btnContainer.style.marginTop = '16px';
     btnContainer.createEl('button', { text: '✅ Publish' }).onclick = async () => {
       this.close();
-      await this.plugin.publishCurrentNote(true);
+      await this.plugin.publishCurrentNote(true, true);
     };
     btnContainer.createEl('button', { text: '❌ Cancel' }).onclick = () => this.close();
   }

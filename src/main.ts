@@ -22,8 +22,10 @@ export default class Note2CMSPublisher extends Plugin {
     this.addSettingTab(this.settingTab);
 
     this.addCommand({ id: 'publish-current-note', name: 'Publish current note', callback: () => this.publishCurrentNote() });
+    this.addCommand({ id: 'publish-current-note-any', name: 'Publish current note (any)', callback: () => this.publishCurrentNote(true, true) });
     this.addCommand({ id: 'bulk-publish-notes', name: 'Bulk publish', callback: () => this.bulkPublishNotes() });
     this.addCommand({ id: 'preview-publish', name: 'Preview note', callback: () => this.previewCurrentNote() });
+    this.addCommand({ id: 'manage-posts', name: 'Manage published posts', callback: () => new ManagePostsModal(this.app, this).open() });
     this.addRibbonIcon('upload', 'Publish', () => this.publishCurrentNote());
 
     this.registerEvent(this.app.vault.on('modify', (file) => this.onFileModified(file)));
@@ -41,10 +43,10 @@ export default class Note2CMSPublisher extends Plugin {
     } catch (e: any) { return { success: false, error: e.message }; }
   }
 
-  async publishCurrentNote(skipConfirmation: boolean = false) {
+  async publishCurrentNote(skipConfirmation: boolean = false, ignoreFilters: boolean = false) {
     const file = this.app.workspace.getActiveFile();
     if (!file) return new Notice('⚠️ No active file');
-    if (!this.shouldPublish(file)) return new Notice('⚠️ Not in publish folder/tag');
+    if (!ignoreFilters && !this.shouldPublish(file)) return new Notice('⚠️ Not in publish folder/tag');
 
     if (this.settings.wifiOnly && !isWiFiConnected()) {
       const content = await this.app.vault.read(file);
@@ -64,9 +66,7 @@ export default class Note2CMSPublisher extends Plugin {
     const result = await this.publisher.publish(content, file.path);
     if (result.success) {
       new Notice(`✅ Published: ${file.basename}`);
-      if (result.permalink && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(result.permalink);
-      }
+      if (result.permalink) new PermalinkModal(this.app, result.permalink).open();
     } else {
       new Notice(`❌ Failed: ${result.error}`);
       await this.queueManager.addToQueue(file, content, 'error');
@@ -91,6 +91,29 @@ export default class Note2CMSPublisher extends Plugin {
     if (isInPublishFolder(file.path, this.settings.publishFolder)) return true;
     if (this.settings.supportPublishTag && hasPublishTag(file, this.app, this.settings.publishTagName)) return true;
     return false;
+  }
+
+  async deletePost(slug: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${this.settings.apiUrl}/posts/${slug}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${this.settings.apiToken}` },
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`API Error ${res.status}: ${errText}`);
+      }
+      return true;
+    } catch (e: any) {
+      new Notice(`❌ Delete failed: ${e.message}`);
+      return false;
+    }
+  }
+
+  async fetchPosts(): Promise<any[]> {
+    const res = await fetch(`${this.settings.apiUrl}/posts`);
+    if (!res.ok) return [];
+    return await res.json();
   }
 
   private onFileModified(file: any) {
@@ -125,6 +148,27 @@ class ConfirmModal extends Modal {
   onClose() { this.contentEl.empty(); }
 }
 
+class PermalinkModal extends Modal {
+  constructor(app: App, private permalink: string) { super(app); }
+  onOpen() {
+    const { contentEl } = this; contentEl.empty();
+    contentEl.createEl('h2', { text: 'Published' });
+    const linkEl = contentEl.createEl('p');
+    linkEl.createEl('a', { text: this.permalink, href: this.permalink });
+    const btn = contentEl.createEl('button', { text: 'Copy Link' });
+    btn.onclick = async () => {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(this.permalink);
+        new Notice('✅ Copied');
+      } else {
+        new Notice('⚠️ Clipboard not available');
+      }
+    };
+    contentEl.createEl('button', { text: 'Close' }).onclick = () => this.close();
+  }
+  onClose() { this.contentEl.empty(); }
+}
+
 class BulkModal extends Modal {
   constructor(app: App, private plugin: Note2CMSPublisher) { super(app); }
   onOpen() {
@@ -148,6 +192,76 @@ class BulkModal extends Modal {
       this.close();
       for (const f of selected) { await this.plugin.doPublish(f); }
       new Notice('✅ Bulk complete');
+    };
+    contentEl.createEl('button', { text: 'Close' }).onclick = () => this.close();
+  }
+  onClose() { this.contentEl.empty(); }
+}
+
+class ManagePostsModal extends Modal {
+  private posts: any[] = [];
+  private filtered: any[] = [];
+  constructor(app: App, private plugin: Note2CMSPublisher) { super(app); }
+  async onOpen() {
+    const { contentEl } = this; contentEl.empty();
+    contentEl.createEl('h2', { text: 'Manage Posts' });
+    const search = contentEl.createEl('input');
+    search.type = 'text';
+    search.placeholder = 'Search by title or slug';
+    search.setAttr('style', 'width: 100%; margin: 8px 0 12px;');
+
+    const list = contentEl.createEl('div');
+    list.setAttr('style', 'max-height: 350px; overflow-y: auto;');
+
+    list.createEl('p', { text: 'Loading…' });
+    this.posts = await this.plugin.fetchPosts();
+    this.filtered = this.posts;
+    list.empty();
+
+    const render = () => {
+      list.empty();
+      if (!this.filtered.length) {
+        list.createEl('p', { text: 'No posts found' });
+        return;
+      }
+      this.filtered.forEach(post => {
+        const row = list.createEl('div');
+        row.setAttr('style', 'display:flex; align-items:center; justify-content:space-between; gap:8px; padding:6px 0;');
+        const label = row.createEl('div');
+        label.createEl('div', { text: post.title || post.slug || 'Untitled' });
+        if (post.permalink) {
+          const a = label.createEl('a', { text: post.permalink, href: post.permalink });
+          a.setAttr('style', 'font-size: 12px;');
+        }
+        const del = row.createEl('button', { text: 'Delete' });
+        del.onclick = async () => {
+          const confirmed = window.confirm(`Delete "${post.title || post.slug}"?`);
+          if (!confirmed) return;
+          const ok = await this.plugin.deletePost(post.slug);
+          if (ok) {
+            this.posts = this.posts.filter(p => p.slug !== post.slug);
+            this.filtered = this.filtered.filter(p => p.slug !== post.slug);
+            render();
+            new Notice('✅ Deleted');
+          }
+        };
+      });
+    };
+
+    render();
+
+    search.oninput = () => {
+      const q = search.value.trim().toLowerCase();
+      if (!q) {
+        this.filtered = this.posts;
+      } else {
+        this.filtered = this.posts.filter(p => {
+          const title = (p.title || '').toLowerCase();
+          const slug = (p.slug || '').toLowerCase();
+          return title.includes(q) || slug.includes(q);
+        });
+      }
+      render();
     };
     contentEl.createEl('button', { text: 'Close' }).onclick = () => this.close();
   }

@@ -1,45 +1,51 @@
 # note2cms Publisher
 
-**One-click publishing from Obsidian to note2cms**
+One-click publishing from Obsidian to note2cms. Works with Leapcell backend and GitHub Pages, supports desktop and mobile.
 
-Publish your notes directly to your static blog (GitHub Pages / Cloudflare Pages) powered by note2cms backend.
-
-Works on **Desktop** and **Android** (and iOS).
-
-### Features
-
-- Publish current note with one click (ribbon icon + command)
+## Features
+- Publish current note with one click
+- Publish any note from any folder
+- Preview before publish
 - Bulk publish from folder or by `#publish` tag
-- Automatic title injection if missing
-- Offline queue + WiFi-only mode
-- Confirmation dialog on mobile
-- Permalink is automatically added back to frontmatter
-- Preview before publishing
-- Clean and simple settings
+- Auto publish on change (optional)
+- Offline queue + WiFi-only mode + queue clear
+- Permalink modal with Copy Link
+- Manage published posts with search and delete
+- Mobile confirmation
 
-### Installation
+## Installation
+Community Plugins:
+- Settings -> Community plugins -> Browse -> search "note2cms Publisher"
 
-**Recommended way (after approval):**
-- Go to **Settings → Community plugins → Browse** and search for "note2cms Publisher"
+BRAT (until approved):
+- Install BRAT
+- BRAT -> Add Beta plugin -> `garrul4ik/note2cms-publisher`
 
-**Temporary way (until approved):**
-- Install **BRAT** plugin
-- In BRAT: `Add Beta plugin` → enter `garrul4ik/note2cms-publisher`
+Manual:
+1. `npm install`
+2. `npm run build`
+3. Copy `main.js`, `manifest.json`, `styles.css` to `.obsidian/plugins/note2cms-publisher/`
 
-### Setup
+## Setup
+1. Settings -> note2cms Publisher
+2. API URL (your Leapcell deployment)
+3. API Token
+4. Optional settings: publish folder, tag, WiFi-only, auto publish
 
-1. Open **Settings → note2cms Publisher**
-2. Enter your note2cms API URL (e.g. `https://your-service.leapcell.dev`)
-3. Paste your API Token
-4. (Optional) Set publish folder and enable features
+## Commands
+- Publish current note
+- Publish current note (any)
+- Preview note
+- Bulk publish
+- Manage published posts
 
-Ready to publish!
+## Notes
+- GitHub Pages deploy requires valid `GITHUB_TOKEN` and `GITHUB_REPO` on note2cms backend.
+- Plugin injects `title` into frontmatter when missing.
 
-### Links
+## Links
+- note2cms backend: https://github.com/mortalezz/note2cms
+- Issues: https://github.com/garrul4ik/note2cms-publisher/issues
 
-- Backend: [note2cms](https://github.com/mortalezz/note2cms)
-- Report issues: [GitHub Issues](https://github.com/garrul4ik/note2cms-publisher/issues)
-
----
-
-Made with ❤️ for Obsidian users who want full control over their blog.
+## License
+MIT License

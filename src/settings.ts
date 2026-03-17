@@ -61,5 +61,8 @@ export class Note2CMSSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName('View Queue').addButton(b => b
       .setButtonText('View').onClick(() => this.plugin.queueManager.showQueueModal()));
+
+    new Setting(containerEl).setName('Clear Queue').addButton(b => b
+      .setButtonText('Clear').onClick(async () => this.plugin.queueManager.clearQueue()));
   }
 }

@@ -45,6 +45,12 @@ export class PublishQueueManager {
 
   showQueueModal() { new QueueModal(this.app, this.plugin, this).open(); }
 
+  async clearQueue() {
+    this.queue = [];
+    await this.saveQueue();
+    new Notice('✅ Queue cleared');
+  }
+
   private async loadQueue() {
     this.queue = this.plugin.settings.queue || [];
   }
@@ -69,6 +75,10 @@ export class QueueModal extends Modal {
         contentEl.createEl('div', { text: `${item.filePath} - ${item.status}` });
       });
     }
+    contentEl.createEl('button', { text: 'Clear Queue' }).onclick = async () => {
+      await this.qm.clearQueue();
+      this.close();
+    };
     contentEl.createEl('button', { text: 'Close' }).onclick = () => this.close();
   }
   onClose() { this.contentEl.empty(); }
