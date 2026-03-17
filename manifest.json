@@ -1,7 +1,7 @@
 {
   "id": "note2cms-publisher",
   "name": "note2cms Publisher",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "minAppVersion": "0.15.0",
   "description": "Publish notes with note2cms (blackjack included)",
   "author": "garrul4ik",
