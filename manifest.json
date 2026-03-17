@@ -1,9 +1,9 @@
 {
   "id": "note2cms-publisher",
   "name": "note2cms Publisher",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "minAppVersion": "1.6.0",
-  "description": "One-click publishing of Obsidian notes to note2cms. Supports folder/tag publishing, offline queue, mobile confirmation, and automatic permalink back to note.",
+  "description": "One-click publishing of notes to note2cms backend. Supports folder/tag publishing, offline queue, mobile confirmation, and automatic permalink saving.",
   "author": "garrul4ik",
   "authorUrl": "https://github.com/garrul4ik",
   "isDesktopOnly": false
