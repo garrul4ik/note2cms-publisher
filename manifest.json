@@ -3,8 +3,7 @@
   "name": "note2cms Publisher",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
-  "description": "Publish notes with note2cms (blackjack included)",
+  "description": "One-click publishing notes to note2cms (static blog on GitHub Pages + Leapcell backend). Works on mobile too.",
   "author": "garrul4ik",
-  "authorUrl": "https://github.com/garrul4ik/note2cms-publisher",
   "isDesktopOnly": false
 }
