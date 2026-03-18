@@ -1,40 +1,53 @@
-import { Notice, Modal, App } from 'obsidian';
+import { Notice, Modal, App, TFile } from 'obsidian';
 import Note2CMSPublisher from './main';
 
+export type QueueStatus = 'pending' | 'success' | 'failed';
+
 export interface QueueItem {
-  id: string; filePath: string; content: string;
-  timestamp: number; retries: number; status: string;
+  id: string;
+  filePath: string;
+  content: string;
+  timestamp: number;
+  retries: number;
+  status: QueueStatus;
 }
 
 export class PublishQueueManager {
   private queue: QueueItem[] = [];
   constructor(private app: App, private plugin: Note2CMSPublisher) {}
 
-  async initialize() { await this.loadQueue(); }
+  initialize() { this.loadQueue(); }
 
-  async addToQueue(file: any, content: string, reason: string) {
+  async addToQueue(file: TFile, content: string, reason: string) {
     this.queue.push({
-      id: `q_${Date.now()}`, filePath: file.path, content,
-      timestamp: Date.now(), retries: 0, status: 'pending'
+      id: `q_${Date.now()}`,
+      filePath: file.path,
+      content,
+      timestamp: Date.now(),
+      retries: 0,
+      status: 'pending',
     });
     await this.saveQueue();
-    new Notice(`📭 Queued: ${file.basename} (${reason})`, 4000);
+    new Notice(`Queued: ${file.basename} (${reason})`, 4000);
   }
 
   async processQueue() {
     if (this.queue.length === 0) return;
-    if (this.plugin.settings.wifiOnly && (navigator as any).connection?.type !== 'wifi') {
-      new Notice('📶 Waiting for WiFi...', 3000); return;
+    const conn = (navigator as Navigator & { connection?: { type?: string } }).connection;
+    if (this.plugin.settings.wifiOnly && conn?.type !== 'wifi') {
+      new Notice('Waiting for Wi-Fi...', 3000);
+      return;
     }
 
     for (const item of [...this.queue]) {
       try {
         await this.plugin.publishContent(item.content, item.filePath);
         item.status = 'success';
-        new Notice(`✅ Published: ${item.filePath}`);
-      } catch (e: any) {
+        new Notice(`Published: ${item.filePath}`);
+      } catch (e: unknown) {
         item.retries++;
-        new Notice(`❌ Failed: ${e.message}`);
+        const msg = e instanceof Error ? e.message : String(e);
+        new Notice(`Failed: ${msg}`);
       }
       await this.saveQueue();
     }
@@ -42,16 +55,17 @@ export class PublishQueueManager {
   }
 
   getQueueLength(): number { return this.queue.filter(i => i.status === 'pending').length; }
+  getQueue(): QueueItem[] { return this.queue; }
 
   showQueueModal() { new QueueModal(this.app, this.plugin, this).open(); }
 
   async clearQueue() {
     this.queue = [];
     await this.saveQueue();
-    new Notice('✅ Queue cleared');
+    new Notice('Queue cleared');
   }
 
-  private async loadQueue() {
+  private loadQueue() {
     this.queue = this.plugin.settings.queue || [];
   }
 
@@ -67,16 +81,16 @@ export class QueueModal extends Modal {
   }
   onOpen() {
     const { contentEl } = this; contentEl.empty();
-    contentEl.createEl('h2', { text: 'Publish Queue' });
-    if (this.qm['queue'].length === 0) {
-      contentEl.createEl('p', { text: 'Queue is empty 🎉' });
+    contentEl.createEl('h2', { text: 'Publish queue' });
+    if (this.qm.getQueue().length === 0) {
+      contentEl.createEl('p', { text: 'Queue is empty' });
     } else {
-      this.qm['queue'].forEach(item => {
+      this.qm.getQueue().forEach((item: QueueItem) => {
         contentEl.createEl('div', { text: `${item.filePath} - ${item.status}` });
       });
     }
-    contentEl.createEl('button', { text: 'Clear Queue' }).onclick = async () => {
-      await this.qm.clearQueue();
+    contentEl.createEl('button', { text: 'Clear queue' }).onclick = () => {
+      void this.qm.clearQueue();
       this.close();
     };
     contentEl.createEl('button', { text: 'Close' }).onclick = () => this.close();

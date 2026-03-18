@@ -8,6 +8,32 @@
   max-height: 400px;
   overflow-y: auto;
 }
+.note2cms-button-row {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+}
+.note2cms-scroll {
+  max-height: 350px;
+  overflow-y: auto;
+}
+.note2cms-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+}
+.note2cms-row-checkbox {
+  margin-right: 10px;
+}
+.note2cms-search-input {
+  width: 100%;
+  margin: 8px 0 12px;
+}
+.note2cms-permalink {
+  font-size: 12px;
+}
 .note2cms-queue-table { width: 100%; border-collapse: collapse; }
 .note2cms-queue-table th, .note2cms-queue-table td {
   padding: 8px; text-align: left; border-bottom: 1px solid var(--background-modifier-border);

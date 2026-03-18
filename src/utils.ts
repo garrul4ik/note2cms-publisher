@@ -1,11 +1,11 @@
-import { TFile, App } from 'obsidian';
+import { TFile, App, Platform } from 'obsidian';
 
 export function isMobileDevice(): boolean {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  return Platform.isMobile;
 }
 
 export function isWiFiConnected(): boolean {
-  const conn = (navigator as any).connection;
+  const conn = (navigator as Navigator & { connection?: { type?: string } }).connection;
   if (!conn) return true;
   return conn.type !== 'cellular';
 }

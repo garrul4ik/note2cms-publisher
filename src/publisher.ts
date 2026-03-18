@@ -1,4 +1,4 @@
-import { Notice } from 'obsidian';
+import { requestUrl } from 'obsidian';
 import Note2CMSPublisher from './main';
 
 function extractFrontmatter(markdown: string): { frontmatter: string | null; body: string } {
@@ -37,33 +37,27 @@ export class Publisher {
         ? ensureTitle(content, title)
         : ensureTitle(content.replace(/^---[\s\S]+?---\n/, ''), title);
 
-      const response = await fetch(`${this.plugin.settings.apiUrl}/publish`, {
+      const response = await requestUrl({
+        url: `${this.plugin.settings.apiUrl}/publish`,
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.plugin.settings.apiToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          markdown: prepared
-        }),
+        body: JSON.stringify({ markdown: prepared }),
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
+      if (response.status < 200 || response.status >= 300) {
+        const errText = typeof response.text === 'string' ? response.text : '';
         throw new Error(`API Error ${response.status}: ${errText}`);
       }
 
-      const result = await response.json();
+      const result = response.json as { permalink?: string; url?: string };
       return { success: true, permalink: result.permalink || result.url };
-    } catch (error: any) {
-      console.error("Publish error:", error);
-      return { success: false, error: error.message };
+    } catch (error: unknown) {
+      console.error('Publish error:', error);
+      const message = error instanceof Error ? error.message : String(error);
+      return { success: false, error: message };
     }
-  }
-
-  async getPreview(content: string): Promise<{ success: boolean; html?: string }> {
-    // Fallback local preview
-    const html = content.replace(/^---[\s\S]+?---\n/, '').replace(/\n/gim, '<br>');
-    return { success: true, html: `<div class="note2cms-preview">${html}</div>` };
   }
 }
