@@ -46,7 +46,7 @@ export class PublishQueueManager {
         new Notice(`Published: ${item.filePath}`);
       } catch (e: unknown) {
         item.retries++;
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = this.errorMessage(e);
         new Notice(`Failed: ${msg}`);
       }
       await this.saveQueue();
@@ -72,6 +72,16 @@ export class PublishQueueManager {
   private async saveQueue() {
     this.plugin.settings.queue = this.queue;
     await this.plugin.saveSettings();
+  }
+
+  private errorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (typeof e === 'string') return e;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return 'Unknown error';
+    }
   }
 }
 

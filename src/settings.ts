@@ -62,7 +62,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .setValue(this.plugin.settings.confirmOnMobile)
       .onChange((v) => { void this.updateSetting('confirmOnMobile', v); }));
 
-    new Setting(containerEl).setName('Wi-Fi only').addToggle(t => t
+    new Setting(containerEl).setName('Wifi only').addToggle(t => t
       .setValue(this.plugin.settings.wifiOnly)
       .onChange((v) => { void this.updateSetting('wifiOnly', v); }));
 

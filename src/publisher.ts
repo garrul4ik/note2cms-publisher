@@ -56,8 +56,18 @@ export class Publisher {
       return { success: true, permalink: result.permalink || result.url };
     } catch (error: unknown) {
       console.error('Publish error:', error);
-      const message = error instanceof Error ? error.message : String(error);
+      const message = this.errorMessage(error);
       return { success: false, error: message };
+    }
+  }
+
+  private errorMessage(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (typeof e === 'string') return e;
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return 'Unknown error';
     }
   }
 }

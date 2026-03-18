@@ -18,7 +18,13 @@ declare global {
 }
 
 function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return 'Unknown error';
+  }
 }
 
 export default class Note2CMSPublisher extends Plugin {
@@ -74,7 +80,7 @@ export default class Note2CMSPublisher extends Plugin {
 
     if (this.settings.wifiOnly && !isWiFiConnected()) {
       const content = await this.app.vault.read(file);
-      await this.queueManager.addToQueue(file, content, 'Wi-Fi only');
+      await this.queueManager.addToQueue(file, content, 'Wifi only');
       return;
     }
 
