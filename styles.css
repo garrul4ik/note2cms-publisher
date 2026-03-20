@@ -8,6 +8,19 @@
   max-height: 400px;
   overflow-y: auto;
 }
+.note2cms-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.note2cms-settings-header h2 {
+  margin: 0;
+}
+.note2cms-settings-link {
+  white-space: nowrap;
+}
 .note2cms-button-row {
   margin-top: 16px;
   display: flex;
@@ -24,12 +37,31 @@
   gap: 8px;
   padding: 6px 0;
 }
+.note2cms-row-actions {
+  display: flex;
+  gap: 8px;
+}
 .note2cms-row-checkbox {
   margin-right: 10px;
 }
 .note2cms-search-input {
   width: 100%;
   margin: 8px 0 12px;
+}
+.note2cms-editor {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  margin-top: 8px;
+}
+.note2cms-delete-button {
+  font-weight: 700;
+  color: #d32f2f;
+}
+.note2cms-edit-button {
+  font-weight: 700;
+  color: #2e7d32;
 }
 .note2cms-permalink {
   font-size: 12px;

@@ -31,12 +31,19 @@ export class Publisher {
   constructor(private plugin: Note2CMSPublisher) {}
 
   async publish(content: string, sourcePath?: string): Promise<{ success: boolean; permalink?: string; error?: string }> {
-    try {
-      const title = titleFromPath(sourcePath);
-      const prepared = this.plugin.settings.includeFrontmatter
-        ? ensureTitle(content, title)
-        : ensureTitle(content.replace(/^---[\s\S]+?---\n/, ''), title);
+    const title = titleFromPath(sourcePath);
+    const prepared = this.plugin.settings.includeFrontmatter
+      ? ensureTitle(content, title)
+      : ensureTitle(content.replace(/^---[\s\S]+?---\n/, ''), title);
+    return this.send(prepared);
+  }
 
+  async publishRaw(markdown: string): Promise<{ success: boolean; permalink?: string; error?: string }> {
+    return this.send(markdown);
+  }
+
+  private async send(markdown: string): Promise<{ success: boolean; permalink?: string; error?: string }> {
+    try {
       const response = await requestUrl({
         url: `${this.plugin.settings.apiUrl}/publish`,
         method: 'POST',
@@ -44,7 +51,7 @@ export class Publisher {
           'Authorization': `Bearer ${this.plugin.settings.apiToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ markdown: prepared }),
+        body: JSON.stringify({ markdown }),
       });
 
       if (response.status < 200 || response.status >= 300) {

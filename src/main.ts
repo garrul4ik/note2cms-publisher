@@ -147,10 +147,30 @@ export default class Note2CMSPublisher extends Plugin {
     }
   }
 
+  async fetchPostSource(slug: string): Promise<string> {
+    const res = await requestUrl({
+      url: `${this.settings.apiUrl}/posts/${slug}/source`,
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${this.settings.apiToken}` },
+    });
+    if (res.status < 200 || res.status >= 300) {
+      const errText = typeof res.text === 'string' ? res.text : '';
+      throw new Error(`API Error ${res.status}: ${errText}`);
+    }
+    if (typeof res.text === 'string') return res.text;
+    throw new Error('Empty source response');
+  }
+
   async fetchPosts(): Promise<PostSummary[]> {
     const res = await requestUrl({ url: `${this.settings.apiUrl}/posts`, method: 'GET' });
     if (res.status < 200 || res.status >= 300) return [];
     return res.json as PostSummary[];
+  }
+
+  async publishRawMarkdown(markdown: string): Promise<{ permalink?: string }> {
+    const result = await this.publisher.publishRaw(markdown);
+    if (!result.success) throw new Error(result.error || 'Unknown publish error');
+    return { permalink: result.permalink };
   }
 
   private onFileModified(file: TAbstractFile) {
@@ -268,10 +288,62 @@ class ConfirmDeleteModal extends Modal {
   }
 }
 
+class EditPostModal extends Modal {
+  private saveInProgress = false;
+
+  constructor(
+    app: App,
+    private plugin: Note2CMSPublisher,
+    private post: PostSummary,
+    private sourceMarkdown: string,
+    private onSaved: () => Promise<void>,
+  ) {
+    super(app);
+  }
+
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    contentEl.createEl('h2', { text: `Edit: ${this.post.title || this.post.slug || 'Untitled'}` });
+
+    const editor = contentEl.createEl('textarea');
+    editor.addClass('note2cms-editor');
+    editor.value = this.sourceMarkdown;
+
+    const buttons = contentEl.createEl('div');
+    buttons.addClass('note2cms-button-row');
+
+    const saveBtn = buttons.createEl('button', { text: 'Save' });
+    saveBtn.onclick = () => { void this.handleSave(editor, saveBtn); };
+
+    buttons.createEl('button', { text: 'Cancel' }).onclick = () => this.close();
+  }
+
+  onClose() { this.contentEl.empty(); }
+
+  private async handleSave(editor: HTMLTextAreaElement, saveBtn: HTMLButtonElement) {
+    if (this.saveInProgress) return;
+    this.saveInProgress = true;
+    saveBtn.disabled = true;
+    try {
+      await this.plugin.publishRawMarkdown(editor.value);
+      new Notice('Post updated');
+      await this.onSaved();
+      this.close();
+    } catch (e: unknown) {
+      new Notice(`Update failed: ${errorMessage(e)}`);
+    } finally {
+      this.saveInProgress = false;
+      saveBtn.disabled = false;
+    }
+  }
+}
+
 class ManagePostsModal extends Modal {
   private posts: PostSummary[] = [];
   private filtered: PostSummary[] = [];
   private renderList?: () => void;
+  private currentSearch = '';
   constructor(app: App, private plugin: Note2CMSPublisher) { super(app); }
   async onOpen() {
     const { contentEl } = this; contentEl.empty();
@@ -304,7 +376,15 @@ class ManagePostsModal extends Modal {
           const a = label.createEl('a', { text: post.permalink, href: post.permalink });
           a.addClass('note2cms-permalink');
         }
-        const del = row.createEl('button', { text: 'Delete' });
+        const actions = row.createEl('div');
+        actions.addClass('note2cms-row-actions');
+
+        const edit = actions.createEl('button', { text: 'Edit' });
+        edit.addClass('note2cms-edit-button');
+        edit.onclick = () => { void this.handleEdit(post); };
+
+        const del = actions.createEl('button', { text: 'Delete' });
+        del.addClass('note2cms-delete-button');
         del.onclick = () => { void this.handleDelete(post); };
       });
     };
@@ -312,19 +392,7 @@ class ManagePostsModal extends Modal {
     this.renderList = render;
     render();
 
-    search.oninput = () => {
-      const q = search.value.trim().toLowerCase();
-      if (!q) {
-        this.filtered = this.posts;
-      } else {
-        this.filtered = this.posts.filter(p => {
-          const title = (p.title || '').toLowerCase();
-          const slug = (p.slug || '').toLowerCase();
-          return title.includes(q) || slug.includes(q);
-        });
-      }
-      render();
-    };
+    search.oninput = () => this.applyFilter(search.value);
     contentEl.createEl('button', { text: 'Close' }).onclick = () => this.close();
   }
   onClose() { this.contentEl.empty(); }
@@ -346,5 +414,31 @@ class ManagePostsModal extends Modal {
       new Notice('Deleted');
       if (this.renderList) this.renderList();
     }
+  }
+
+  private async handleEdit(post: PostSummary) {
+    try {
+      const source = await this.plugin.fetchPostSource(post.slug);
+      new EditPostModal(this.app, this.plugin, post, source, async () => {
+        this.posts = await this.plugin.fetchPosts();
+        this.applyFilter(this.currentSearch);
+      }).open();
+    } catch (e: unknown) {
+      new Notice(`Load source failed: ${errorMessage(e)}`);
+    }
+  }
+
+  private applyFilter(searchValue: string) {
+    this.currentSearch = searchValue.trim().toLowerCase();
+    if (!this.currentSearch) {
+      this.filtered = this.posts;
+    } else {
+      this.filtered = this.posts.filter((p) => {
+        const title = (p.title || '').toLowerCase();
+        const slug = (p.slug || '').toLowerCase();
+        return title.includes(this.currentSearch) || slug.includes(this.currentSearch);
+      });
+    }
+    if (this.renderList) this.renderList();
   }
 }
