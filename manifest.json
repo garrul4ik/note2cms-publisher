@@ -1,7 +1,7 @@
 {
   "id": "note2cms-publisher",
   "name": "note2cms Publisher",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "minAppVersion": "1.6.0",
   "description": "One-click publishing of notes to note2cms backend. Supports folder/tag publishing, offline queue, mobile confirmation, and automatic permalink saving.",
   "author": "garrul4ik",
