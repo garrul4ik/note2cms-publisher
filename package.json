@@ -5,10 +5,15 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.js",
-    "build": "node esbuild.config.js production"
+    "build": "node esbuild.config.js production",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\""
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.27.0",
+    "@typescript-eslint/parser": "^8.27.0",
     "esbuild": "^0.16.10",
+    "eslint": "^8.57.1",
     "obsidian": "^1.1.1",
     "typescript": "^4.9.4",
     "@types/node": "^18.11.9"

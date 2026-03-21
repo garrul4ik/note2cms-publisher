@@ -80,7 +80,7 @@ export default class Note2CMSPublisher extends Plugin {
 
     if (this.settings.wifiOnly && !isWiFiConnected()) {
       const content = await this.app.vault.read(file);
-      await this.queueManager.addToQueue(file, content, 'Wifi only');
+      await this.queueManager.addToQueue(file, content, 'Wi-Fi only');
       return;
     }
 
@@ -98,7 +98,7 @@ export default class Note2CMSPublisher extends Plugin {
       return;
     }
 
-    const result = await this.publisher.publish(content, file.path);
+    const result = await this.publisher.publish(content, file.path, { interactive: true });
     if (result.success) {
       new Notice(`Published: ${file.basename}`);
       if (result.permalink) new PermalinkModal(this.app, result.permalink).open();
@@ -109,7 +109,7 @@ export default class Note2CMSPublisher extends Plugin {
   }
 
   async publishContent(content: string, filePath?: string) {
-    const res = await this.publisher.publish(content, filePath);
+    const res = await this.publisher.publish(content, filePath, { interactive: false });
     if (!res.success) throw new Error(res.error);
   }
 
@@ -138,7 +138,7 @@ export default class Note2CMSPublisher extends Plugin {
       });
       if (res.status < 200 || res.status >= 300) {
         const errText = typeof res.text === 'string' ? res.text : '';
-        throw new Error(`API Error ${res.status}: ${errText}`);
+        throw new Error(`API error ${res.status}: ${errText}`);
       }
       return true;
     } catch (e: unknown) {
@@ -155,7 +155,7 @@ export default class Note2CMSPublisher extends Plugin {
     });
     if (res.status < 200 || res.status >= 300) {
       const errText = typeof res.text === 'string' ? res.text : '';
-      throw new Error(`API Error ${res.status}: ${errText}`);
+      throw new Error(`API error ${res.status}: ${errText}`);
     }
     if (typeof res.text === 'string') return res.text;
     throw new Error('Empty source response');

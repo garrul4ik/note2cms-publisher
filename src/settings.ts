@@ -14,6 +14,9 @@ export interface Note2CMSSettings {
   publishTagName: string;
   queueRetryCount: number;
   queueRetryDelay: number;
+  frontmatterMode: 'smart_normalize';
+  showQuickFixModal: boolean;
+  defaultWritebackAction: 'ask' | 'publish_only' | 'publish_and_save';
   queue?: QueueItem[];
 }
 
@@ -29,6 +32,9 @@ export const DEFAULT_SETTINGS: Note2CMSSettings = {
   publishTagName: 'publish',
   queueRetryCount: 3,
   queueRetryDelay: 60000,
+  frontmatterMode: 'smart_normalize',
+  showQuickFixModal: true,
+  defaultWritebackAction: 'ask',
   queue: [],
 };
 
@@ -49,7 +55,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
     githubLink.setAttr('target', '_blank');
     githubLink.setAttr('rel', 'noopener noreferrer');
 
-    new Setting(containerEl).setName('API URL').addText(t => t
+    new Setting(containerEl).setName('API url').addText(t => t
       .setValue(this.plugin.settings.apiUrl)
       .onChange((v) => { void this.updateSetting('apiUrl', v); }));
 
@@ -73,13 +79,31 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .setValue(this.plugin.settings.confirmOnMobile)
       .onChange((v) => { void this.updateSetting('confirmOnMobile', v); }));
 
-    new Setting(containerEl).setName('Wifi only').addToggle(t => t
+    new Setting(containerEl).setName('Wi-Fi only').addToggle(t => t
       .setValue(this.plugin.settings.wifiOnly)
       .onChange((v) => { void this.updateSetting('wifiOnly', v); }));
 
     new Setting(containerEl).setName('Support #publish tag').addToggle(t => t
       .setValue(this.plugin.settings.supportPublishTag)
       .onChange((v) => { void this.updateSetting('supportPublishTag', v); }));
+
+    new Setting(containerEl).setName('Frontmatter mode').addDropdown((d) => d
+      .addOption('smart_normalize', 'Smart normalize')
+      .setValue(this.plugin.settings.frontmatterMode)
+      .onChange((v: 'smart_normalize') => { void this.updateSetting('frontmatterMode', v); }));
+
+    new Setting(containerEl).setName('Show quick-fix modal').addToggle((t) => t
+      .setValue(this.plugin.settings.showQuickFixModal)
+      .onChange((v) => { void this.updateSetting('showQuickFixModal', v); }));
+
+    new Setting(containerEl).setName('Default writeback action').addDropdown((d) => d
+      .addOption('ask', 'Ask each time')
+      .addOption('publish_only', 'Publish only')
+      .addOption('publish_and_save', 'Publish and save')
+      .setValue(this.plugin.settings.defaultWritebackAction)
+      .onChange((v: 'ask' | 'publish_only' | 'publish_and_save') => {
+        void this.updateSetting('defaultWritebackAction', v);
+      }));
 
     new Setting(containerEl).setName('View queue').addButton(b => b
       .setButtonText('View').onClick(() => { this.plugin.queueManager.showQueueModal(); }));

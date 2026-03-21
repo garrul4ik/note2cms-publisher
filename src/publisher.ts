@@ -1,23 +1,16 @@
-import { requestUrl } from 'obsidian';
+import { Notice, TFile, requestUrl } from 'obsidian';
 import Note2CMSPublisher from './main';
+import { runFrontmatterPreflight, type PreflightResult } from './frontmatter-preflight';
+import { showQuickFixModal, type QuickFixAction, type QuickFixResult } from './quick-fix-modal';
 
-function extractFrontmatter(markdown: string): { frontmatter: string | null; body: string } {
-  if (!markdown.startsWith('---\n')) return { frontmatter: null, body: markdown };
-  const end = markdown.indexOf('\n---', 4);
-  if (end === -1) return { frontmatter: null, body: markdown };
-  const fm = markdown.slice(4, end).trim();
-  const body = markdown.slice(end + 4);
-  return { frontmatter: fm, body };
+interface PublishOptions {
+  interactive?: boolean;
 }
 
-function ensureTitle(markdown: string, title: string): string {
-  const { frontmatter, body } = extractFrontmatter(markdown);
-  if (frontmatter) {
-    if (/^title:\s*.+/m.test(frontmatter)) return markdown;
-    const withTitle = `title: ${title}\n${frontmatter}`;
-    return `---\n${withTitle}\n---${body}`;
-  }
-  return `---\ntitle: ${title}\n---\n${markdown}`;
+interface PublishResponse {
+  success: boolean;
+  permalink?: string;
+  error?: string;
 }
 
 function titleFromPath(path?: string): string {
@@ -27,28 +20,100 @@ function titleFromPath(path?: string): string {
   return name.replace(/\.md$/i, '');
 }
 
+function mapDefaultAction(value: 'ask' | 'publish_only' | 'publish_and_save'): QuickFixAction {
+  if (value === 'publish_only') return 'publish_only';
+  if (value === 'publish_and_save') return 'publish_and_save';
+  return 'cancel';
+}
+
 export class Publisher {
   constructor(private plugin: Note2CMSPublisher) {}
 
-  async publish(content: string, sourcePath?: string): Promise<{ success: boolean; permalink?: string; error?: string }> {
-    const title = titleFromPath(sourcePath);
-    const prepared = this.plugin.settings.includeFrontmatter
-      ? ensureTitle(content, title)
-      : ensureTitle(content.replace(/^---[\s\S]+?---\n/, ''), title);
-    return this.send(prepared);
+  async publish(content: string, sourcePath?: string, options?: PublishOptions): Promise<PublishResponse> {
+    const interactive = options?.interactive ?? true;
+    const preflight = runFrontmatterPreflight({
+      app: this.plugin.app,
+      markdown: content,
+      sourcePath,
+      includeFrontmatter: this.plugin.settings.includeFrontmatter,
+    });
+
+    if (!preflight.canPublish) {
+      return { success: false, error: 'Title is required to publish.' };
+    }
+
+    const shouldReview = preflight.issues.length > 0;
+    let action: QuickFixAction = 'publish_only';
+    let markdownToPublish = preflight.normalizedMarkdown;
+    if (shouldReview) {
+      const quickFix = await this.resolveQuickFixAction(preflight, content, interactive);
+      action = quickFix.action;
+      if (action === 'cancel') {
+        return { success: false, error: 'Publish cancelled.' };
+      }
+      if (quickFix.markdown && quickFix.markdown.trim().length > 0) {
+        const reviewed = runFrontmatterPreflight({
+          app: this.plugin.app,
+          markdown: quickFix.markdown,
+          sourcePath,
+          includeFrontmatter: this.plugin.settings.includeFrontmatter,
+        });
+        if (!reviewed.canPublish) {
+          return { success: false, error: 'Edited content is missing title.' };
+        }
+        markdownToPublish = reviewed.normalizedMarkdown;
+      }
+    }
+
+    if (action === 'publish_and_save') {
+      await this.writeNormalizedToFile(sourcePath, markdownToPublish);
+    }
+
+    return this.send(markdownToPublish);
   }
 
-  async publishRaw(markdown: string): Promise<{ success: boolean; permalink?: string; error?: string }> {
+  async publishRaw(markdown: string): Promise<PublishResponse> {
     return this.send(markdown);
   }
 
-  private async send(markdown: string): Promise<{ success: boolean; permalink?: string; error?: string }> {
+  private async resolveQuickFixAction(
+    preflight: PreflightResult,
+    originalMarkdown: string,
+    interactive: boolean,
+  ): Promise<QuickFixResult> {
+    const configured = this.plugin.settings.defaultWritebackAction;
+
+    if (!interactive || !this.plugin.settings.showQuickFixModal) {
+      const action = configured === 'ask' ? 'publish_only' : configured;
+      return {
+        action,
+        markdown: preflight.normalizedMarkdown,
+      };
+    }
+
+    return showQuickFixModal(this.plugin.app, {
+      issues: preflight.issues,
+      originalMarkdown,
+      normalizedMarkdown: preflight.normalizedMarkdown,
+      defaultAction: mapDefaultAction(configured),
+    });
+  }
+
+  private async writeNormalizedToFile(sourcePath: string | undefined, normalizedMarkdown: string): Promise<void> {
+    if (!sourcePath) return;
+    const abstractFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
+    if (!(abstractFile instanceof TFile)) return;
+    await this.plugin.app.vault.modify(abstractFile, normalizedMarkdown);
+    new Notice(`Updated note: ${titleFromPath(sourcePath)}`);
+  }
+
+  private async send(markdown: string): Promise<PublishResponse> {
     try {
       const response = await requestUrl({
         url: `${this.plugin.settings.apiUrl}/publish`,
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${this.plugin.settings.apiToken}`,
+          Authorization: `Bearer ${this.plugin.settings.apiToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ markdown }),
@@ -56,15 +121,14 @@ export class Publisher {
 
       if (response.status < 200 || response.status >= 300) {
         const errText = typeof response.text === 'string' ? response.text : '';
-        throw new Error(`API Error ${response.status}: ${errText}`);
+        throw new Error(`API error ${response.status}: ${errText}`);
       }
 
       const result = response.json as { permalink?: string; url?: string };
       return { success: true, permalink: result.permalink || result.url };
     } catch (error: unknown) {
       console.error('Publish error:', error);
-      const message = this.errorMessage(error);
-      return { success: false, error: message };
+      return { success: false, error: this.errorMessage(error) };
     }
   }
 

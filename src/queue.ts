@@ -35,7 +35,7 @@ export class PublishQueueManager {
     if (this.queue.length === 0) return;
     const conn = (navigator as Navigator & { connection?: { type?: string } }).connection;
     if (this.plugin.settings.wifiOnly && conn?.type !== 'wifi') {
-      new Notice('Waiting for wifi...', 3000);
+      new Notice('Waiting for Wi-Fi...', 3000);
       return;
     }
 
