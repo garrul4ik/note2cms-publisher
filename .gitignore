@@ -3,3 +3,4 @@ node_modules/
 !esbuild.config.js
 *.d.ts
 .env
+release/
