@@ -37,10 +37,11 @@ export class Note2CMSSettingTab extends PluginSettingTab {
 
   display(): void {
     const { containerEl } = this; containerEl.empty();
-    const headerRow = containerEl.createEl('div');
-    headerRow.addClass('note2cms-settings-header');
-    headerRow.createEl('h2', { text: 'note2cms Publisher plugin' });
-    const githubLink = headerRow.createEl('a', {
+    const heading = new Setting(containerEl)
+      .setName('note2cms Publisher plugin')
+      .setHeading();
+    heading.settingEl.addClass('note2cms-settings-header');
+    const githubLink = heading.controlEl.createEl('a', {
       text: 'Link to GitHub',
       href: 'https://github.com/garrul4ik/note2cms-publisher',
     });
