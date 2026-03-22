@@ -28,6 +28,6 @@ export class PreviewModal extends Modal {
 
   private async renderPreview(container: HTMLElement) {
     const md = this.content.replace(/^---[\s\S]+?---\n/, '');
-    await MarkdownRenderer.render(this.app, md, container, '', this.plugin);
+    await MarkdownRenderer.render(this.app, md, container, '', this);
   }
 }
