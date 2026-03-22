@@ -55,7 +55,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
     githubLink.setAttr('target', '_blank');
     githubLink.setAttr('rel', 'noopener noreferrer');
 
-    new Setting(containerEl).setName('Api url').addText(t => t
+    new Setting(containerEl).setName('API URL').addText(t => t
       .setValue(this.plugin.settings.apiUrl)
       .onChange((v) => { void this.updateSetting('apiUrl', v); }));
 

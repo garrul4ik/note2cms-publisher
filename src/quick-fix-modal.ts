@@ -46,7 +46,7 @@ export class QuickFixModal extends Modal {
     compare.addClass('note2cms-compare-grid');
 
     const beforeWrap = compare.createEl('div');
-    beforeWrap.createEl('h3', { text: 'Original markdown' });
+    beforeWrap.createEl('h3', { text: 'Original Markdown' });
     const beforeText = beforeWrap.createEl('textarea');
     beforeText.addClass('note2cms-editor');
     beforeText.addClass('note2cms-readonly');
@@ -54,7 +54,7 @@ export class QuickFixModal extends Modal {
     beforeText.readOnly = true;
 
     const afterWrap = compare.createEl('div');
-    afterWrap.createEl('h3', { text: 'Normalized markdown' });
+    afterWrap.createEl('h3', { text: 'Normalized Markdown' });
     const afterText = afterWrap.createEl('textarea');
     afterText.addClass('note2cms-editor');
     afterText.value = this.props.normalizedMarkdown;
