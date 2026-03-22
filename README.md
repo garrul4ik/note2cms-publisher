@@ -89,13 +89,11 @@ And by opposing end them?
 ```markdown
 ---
 title:
-tags:
-  - рассказ
-  - чехов
 date: 1898-??
 slug: "dushenka
 excerpt: Душечка — короткий рассказ о любви и подражании.
 publish yes
+tags: рассказ, чехов
 ---
 
 # Душечка
