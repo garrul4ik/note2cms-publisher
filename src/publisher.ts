@@ -65,11 +65,15 @@ export class Publisher {
       }
     }
 
-    if (action === 'publish_and_save') {
+    // Публикуем ПЕРЕД записью в файл
+    const publishResult = await this.send(markdownToPublish);
+
+    // Записываем в файл только после успешной публикации
+    if (publishResult.success && action === 'publish_and_save') {
       await this.writeNormalizedToFile(sourcePath, markdownToPublish);
     }
 
-    return this.send(markdownToPublish);
+    return publishResult;
   }
 
   async publishRaw(markdown: string): Promise<PublishResponse> {
@@ -109,7 +113,11 @@ export class Publisher {
 
   private async send(markdown: string): Promise<PublishResponse> {
     try {
-      const response = await requestUrl({
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
+      );
+
+      const requestPromise = requestUrl({
         url: `${this.plugin.settings.apiUrl}/publish`,
         method: 'POST',
         headers: {
@@ -119,15 +127,41 @@ export class Publisher {
         body: JSON.stringify({ markdown }),
       });
 
+      const response = await Promise.race([requestPromise, timeoutPromise]);
+
       if (response.status < 200 || response.status >= 300) {
-        const errText = typeof response.text === 'string' ? response.text : '';
-        throw new Error(`API error ${response.status}: ${errText}`);
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${response.text || 'Unknown error'}`,
+        };
       }
 
-      const result = response.json as { permalink?: string; url?: string };
-      return { success: true, permalink: result.permalink || result.url };
+      // Валидация ответа
+      const result = response.json;
+      if (typeof result !== 'object' || result === null) {
+        console.error('[note2cms] Invalid API response: not an object');
+        return {
+          success: false,
+          error: 'Invalid response format from server',
+        };
+      }
+
+      const typedResult = result as Record<string, unknown>;
+      
+      // Проверка типов полей
+      if (typedResult.permalink !== undefined && typeof typedResult.permalink !== 'string') {
+        console.warn('[note2cms] Invalid permalink type in response');
+      }
+      if (typedResult.url !== undefined && typeof typedResult.url !== 'string') {
+        console.warn('[note2cms] Invalid url type in response');
+      }
+
+      return {
+        success: true,
+        permalink: typeof typedResult.permalink === 'string' ? typedResult.permalink : (typeof typedResult.url === 'string' ? typedResult.url : undefined),
+      };
     } catch (error: unknown) {
-      console.error('Publish error:', error);
+      console.error('[note2cms] Publish error:', error);
       return { success: false, error: this.errorMessage(error) };
     }
   }
