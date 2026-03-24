@@ -15,8 +15,13 @@ interface QuickFixModalProps {
   defaultAction: QuickFixAction;
 }
 
+/**
+ * Модальное окно для быстрого исправления frontmatter
+ * с защитой от race condition и XSS
+ */
 export class QuickFixModal extends Modal {
   private resolved = false;
+  private resolving = false;
   private editableAfter?: HTMLTextAreaElement;
 
   constructor(
@@ -39,7 +44,9 @@ export class QuickFixModal extends Modal {
     const issueList = contentEl.createEl('ul');
     issueList.addClass('note2cms-issues-list');
     this.props.issues.forEach((issue) => {
-      issueList.createEl('li', { text: issue.message });
+      const li = issueList.createEl('li');
+      // Защита от XSS: используем textContent вместо innerHTML
+      li.textContent = issue.message;
     });
 
     const compare = contentEl.createEl('div');
@@ -83,13 +90,18 @@ export class QuickFixModal extends Modal {
 
   onClose(): void {
     this.contentEl.empty();
-    if (!this.resolved) {
+    if (!this.resolved && !this.resolving) {
       this.onResult({ action: 'cancel' });
     }
   }
 
+  /**
+   * Разрешает модальное окно с защитой от race condition
+   */
   private resolve(result: QuickFixResult): void {
-    if (this.resolved) return;
+    if (this.resolved || this.resolving) return;
+    
+    this.resolving = true;
     this.resolved = true;
     this.onResult(result);
     this.close();

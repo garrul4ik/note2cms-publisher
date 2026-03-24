@@ -1,7 +1,12 @@
-import { Modal, App, MarkdownRenderer } from 'obsidian';
+import { Modal, App, MarkdownRenderer, Component } from 'obsidian';
 import Note2CMSPublisher from './main';
 
+/**
+ * Модальное окно предпросмотра с правильной очисткой компонентов
+ */
 export class PreviewModal extends Modal {
+  private previewComponent?: Component;
+
   constructor(app: App, private plugin: Note2CMSPublisher, private content: string) {
     super(app);
   }
@@ -24,10 +29,19 @@ export class PreviewModal extends Modal {
     btnContainer.createEl('button', { text: 'Cancel' }).onclick = () => this.close();
   }
 
-  onClose() { this.contentEl.empty(); }
+  onClose() {
+    // Очистка компонента рендеринга
+    if (this.previewComponent) {
+      this.previewComponent.unload();
+      this.previewComponent = undefined;
+    }
+    this.contentEl.empty();
+  }
 
   private async renderPreview(container: HTMLElement) {
     const md = this.content.replace(/^---[\s\S]+?---\n/, '');
-    await MarkdownRenderer.render(this.app, md, container, '', this);
+    this.previewComponent = new Component();
+    this.previewComponent.load();
+    await MarkdownRenderer.render(this.app, md, container, '', this.previewComponent);
   }
 }
