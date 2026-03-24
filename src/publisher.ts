@@ -3,6 +3,11 @@ import Note2CMSPublisher from './main';
 import { runFrontmatterPreflight, type PreflightResult } from './frontmatter-preflight';
 import { showQuickFixModal, type QuickFixAction, type QuickFixResult } from './quick-fix-modal';
 
+// Константы
+const REQUEST_TIMEOUT_MS = 30000;
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1000;
+
 interface PublishOptions {
   interactive?: boolean;
 }
@@ -13,6 +18,9 @@ interface PublishResponse {
   error?: string;
 }
 
+/**
+ * Извлекает название из пути к файлу
+ */
 function titleFromPath(path?: string): string {
   if (!path) return 'Untitled';
   const parts = path.split('/');
@@ -20,14 +28,24 @@ function titleFromPath(path?: string): string {
   return name.replace(/\.md$/i, '');
 }
 
+/**
+ * Маппинг действия по умолчанию
+ */
 function mapDefaultAction(value: 'ask' | 'publish_only' | 'publish_and_save'): QuickFixAction {
   if (value === 'publish_only') return 'publish_only';
   if (value === 'publish_and_save') return 'publish_and_save';
   return 'cancel';
 }
 
+/**
+ * Класс для публикации заметок с автоматическим восстановлением после ошибок
+ */
 export class Publisher {
   constructor(private plugin: Note2CMSPublisher) {}
+
+  /**
+   * Публикует контент с предварительной проверкой frontmatter
+   */
 
   async publish(content: string, sourcePath?: string, options?: PublishOptions): Promise<PublishResponse> {
     const interactive = options?.interactive ?? true;
@@ -76,6 +94,9 @@ export class Publisher {
     return publishResult;
   }
 
+  /**
+   * Публикует сырой markdown без предварительной обработки
+   */
   async publishRaw(markdown: string): Promise<PublishResponse> {
     return this.send(markdown);
   }
@@ -103,6 +124,9 @@ export class Publisher {
     });
   }
 
+  /**
+   * Записывает нормализованный markdown в файл
+   */
   private async writeNormalizedToFile(sourcePath: string | undefined, normalizedMarkdown: string): Promise<void> {
     if (!sourcePath) return;
     const abstractFile = this.plugin.app.vault.getAbstractFileByPath(sourcePath);
@@ -111,59 +135,74 @@ export class Publisher {
     new Notice(`Updated note: ${titleFromPath(sourcePath)}`);
   }
 
+  /**
+   * Отправляет markdown на сервер с автоматическим восстановлением после ошибок
+   */
   private async send(markdown: string): Promise<PublishResponse> {
-    try {
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout after 30 seconds')), 30000)
-      );
+    let lastError: unknown = null;
+    
+    // Попытки с экспоненциальной задержкой
+    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+      try {
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Request timeout after ${REQUEST_TIMEOUT_MS / 1000} seconds`)), REQUEST_TIMEOUT_MS)
+        );
 
-      const requestPromise = requestUrl({
-        url: `${this.plugin.settings.apiUrl}/publish`,
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.plugin.settings.apiToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ markdown }),
-      });
+        const requestPromise = requestUrl({
+          url: `${this.plugin.settings.apiUrl}/publish`,
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.plugin.settings.apiToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ markdown }),
+        });
 
-      const response = await Promise.race([requestPromise, timeoutPromise]);
+        const response = await Promise.race([requestPromise, timeoutPromise]);
 
-      if (response.status < 200 || response.status >= 300) {
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`HTTP ${response.status}: ${response.text || 'Unknown error'}`);
+        }
+
+        // Валидация ответа
+        const result = response.json;
+        if (typeof result !== 'object' || result === null) {
+          console.error('[note2cms] Invalid API response: not an object');
+          throw new Error('Invalid response format from server');
+        }
+
+        const typedResult = result as Record<string, unknown>;
+        
+        // Проверка типов полей
+        if (typedResult.permalink !== undefined && typeof typedResult.permalink !== 'string') {
+          console.warn('[note2cms] Invalid permalink type in response');
+        }
+        if (typedResult.url !== undefined && typeof typedResult.url !== 'string') {
+          console.warn('[note2cms] Invalid url type in response');
+        }
+
+        // Успешный ответ - возвращаем результат
         return {
-          success: false,
-          error: `HTTP ${response.status}: ${response.text || 'Unknown error'}`,
+          success: true,
+          permalink: typeof typedResult.permalink === 'string' ? typedResult.permalink : (typeof typedResult.url === 'string' ? typedResult.url : undefined),
         };
+      } catch (error: unknown) {
+        lastError = error;
+        console.error(`[note2cms] Publish attempt ${attempt}/${MAX_RETRY_ATTEMPTS} failed:`, error);
+        
+        // Если это последняя попытка, возвращаем ошибку
+        if (attempt === MAX_RETRY_ATTEMPTS) {
+          return { success: false, error: this.errorMessage(error) };
+        }
+        
+        // Экспоненциальная задержка перед следующей попыткой
+        const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-
-      // Валидация ответа
-      const result = response.json;
-      if (typeof result !== 'object' || result === null) {
-        console.error('[note2cms] Invalid API response: not an object');
-        return {
-          success: false,
-          error: 'Invalid response format from server',
-        };
-      }
-
-      const typedResult = result as Record<string, unknown>;
-      
-      // Проверка типов полей
-      if (typedResult.permalink !== undefined && typeof typedResult.permalink !== 'string') {
-        console.warn('[note2cms] Invalid permalink type in response');
-      }
-      if (typedResult.url !== undefined && typeof typedResult.url !== 'string') {
-        console.warn('[note2cms] Invalid url type in response');
-      }
-
-      return {
-        success: true,
-        permalink: typeof typedResult.permalink === 'string' ? typedResult.permalink : (typeof typedResult.url === 'string' ? typedResult.url : undefined),
-      };
-    } catch (error: unknown) {
-      console.error('[note2cms] Publish error:', error);
-      return { success: false, error: this.errorMessage(error) };
     }
+    
+    // Fallback (не должен достигаться)
+    return { success: false, error: this.errorMessage(lastError) };
   }
 
   private errorMessage(e: unknown): string {

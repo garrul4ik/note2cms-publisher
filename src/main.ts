@@ -5,6 +5,12 @@ import { Publisher } from './publisher';
 import { PreviewModal } from './preview';
 import { isMobileDevice, isWiFiConnected, hasPublishTag, isInPublishFolder } from './utils';
 
+// Константы
+const AUTO_PUBLISH_DEBOUNCE_MS = 500;
+const POSTS_CACHE_TTL_MS = 60000; // 1 минута
+const BULK_PUBLISH_BATCH_SIZE = 5;
+const BULK_PUBLISH_DELAY_MS = 100;
+
 interface PostSummary {
   slug: string;
   title?: string;
@@ -17,6 +23,9 @@ declare global {
   }
 }
 
+/**
+ * Преобразует ошибку в читаемое сообщение
+ */
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === 'string') return e;
@@ -27,6 +36,9 @@ function errorMessage(e: unknown): string {
   }
 }
 
+/**
+ * Главный класс плагина для публикации заметок в CMS
+ */
 export default class Note2CMSPublisher extends Plugin {
   settings: Note2CMSSettings;
   settingTab: Note2CMSSettingTab;
@@ -34,6 +46,8 @@ export default class Note2CMSPublisher extends Plugin {
   publisher: Publisher;
   private autoPublishTimers: Record<string, number> = {};
   private publishInProgress = new Set<string>();
+  private postsCache: { data: PostSummary[]; timestamp: number } | null = null;
+  private fileModifyHandler?: (file: TAbstractFile) => void;
 
   async onload() {
     await this.loadSettings();
@@ -51,7 +65,9 @@ export default class Note2CMSPublisher extends Plugin {
     this.addCommand({ id: 'manage-posts', name: 'Manage published posts', callback: () => new ManagePostsModal(this.app, this).open() });
     this.addRibbonIcon('upload', 'Publish', () => { void this.publishCurrentNote(); });
 
-    this.registerEvent(this.app.vault.on('modify', (file) => this.onFileModified(file)));
+    // Сохраняем обработчик для правильной очистки
+    this.fileModifyHandler = (file: TAbstractFile) => this.onFileModified(file);
+    this.registerEvent(this.app.vault.on('modify', this.fileModifyHandler));
 
     window.note2cmsPlugin = this;
   }
@@ -60,6 +76,12 @@ export default class Note2CMSPublisher extends Plugin {
     // Очистить все активные таймеры автопубликации
     Object.values(this.autoPublishTimers).forEach(timer => window.clearTimeout(timer));
     this.autoPublishTimers = {};
+    
+    // Очистить кеш
+    this.postsCache = null;
+    
+    // Очистить глобальную ссылку
+    delete window.note2cmsPlugin;
   }
 
   async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
@@ -167,10 +189,28 @@ export default class Note2CMSPublisher extends Plugin {
     throw new Error('Empty source response');
   }
 
+  /**
+   * Получает список постов с кешированием
+   */
   async fetchPosts(): Promise<PostSummary[]> {
+    // Проверка кеша
+    if (this.postsCache && Date.now() - this.postsCache.timestamp < POSTS_CACHE_TTL_MS) {
+      return this.postsCache.data;
+    }
+    
     const res = await requestUrl({ url: `${this.settings.apiUrl}/posts`, method: 'GET' });
     if (res.status < 200 || res.status >= 300) return [];
-    return res.json as PostSummary[];
+    
+    const posts = res.json as PostSummary[];
+    this.postsCache = { data: posts, timestamp: Date.now() };
+    return posts;
+  }
+  
+  /**
+   * Инвалидирует кеш постов
+   */
+  invalidatePostsCache(): void {
+    this.postsCache = null;
   }
 
   async publishRawMarkdown(markdown: string): Promise<{ permalink?: string }> {
@@ -208,7 +248,7 @@ export default class Note2CMSPublisher extends Plugin {
       void this.doPublish(file).finally(() => {
         this.publishInProgress.delete(file.path);
       });
-    }, 500);
+    }, AUTO_PUBLISH_DEBOUNCE_MS);
   }
 }
 
@@ -277,9 +317,36 @@ class BulkModal extends Modal {
   }
   onClose() { this.contentEl.empty(); }
 
+  /**
+   * Публикует выбранные файлы параллельными батчами
+   */
   private async publishSelected(files: TFile[]) {
-    for (const f of files) { await this.plugin.doPublish(f); }
-    new Notice('Bulk publish complete');
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Публикуем батчами для оптимизации
+    for (let i = 0; i < files.length; i += BULK_PUBLISH_BATCH_SIZE) {
+      const batch = files.slice(i, i + BULK_PUBLISH_BATCH_SIZE);
+      
+      const results = await Promise.allSettled(
+        batch.map(f => this.plugin.doPublish(f))
+      );
+      
+      results.forEach(result => {
+        if (result.status === 'fulfilled') {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      });
+      
+      // Небольшая задержка между батчами
+      if (i + BULK_PUBLISH_BATCH_SIZE < files.length) {
+        await new Promise(resolve => setTimeout(resolve, BULK_PUBLISH_DELAY_MS));
+      }
+    }
+    
+    new Notice(`Bulk publish complete: ${successCount} success, ${failCount} failed`);
   }
 }
 
@@ -347,6 +414,7 @@ class EditPostModal extends Modal {
     try {
       await this.plugin.publishRawMarkdown(editor.value);
       new Notice('Post updated');
+      this.plugin.invalidatePostsCache(); // Инвалидация кеша после обновления
       await this.onSaved();
       this.close();
     } catch (e: unknown) {
@@ -428,6 +496,7 @@ class ManagePostsModal extends Modal {
     if (!confirmed) return;
     const ok = await this.plugin.deletePost(post.slug);
     if (ok) {
+      this.plugin.invalidatePostsCache(); // Инвалидация кеша после удаления
       this.posts = this.posts.filter(p => p.slug !== post.slug);
       this.filtered = this.filtered.filter(p => p.slug !== post.slug);
       new Notice('Deleted');

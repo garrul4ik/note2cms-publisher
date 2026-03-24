@@ -38,11 +38,66 @@ export const DEFAULT_SETTINGS: Note2CMSSettings = {
   queue: [],
 };
 
+/**
+ * Валидатор настроек плагина
+ */
+class SettingsValidator {
+  static validateApiUrl(url: string): { valid: boolean; error?: string } {
+    if (!url || url.trim().length === 0) {
+      return { valid: false, error: 'API URL cannot be empty' };
+    }
+    try {
+      new URL(url);
+      return { valid: true };
+    } catch {
+      return { valid: false, error: 'Invalid URL format' };
+    }
+  }
+
+  static validateApiToken(token: string): { valid: boolean; error?: string } {
+    if (!token || token.trim().length === 0) {
+      return { valid: false, error: 'API token cannot be empty' };
+    }
+    if (token.length < 10) {
+      return { valid: false, error: 'API token too short' };
+    }
+    return { valid: true };
+  }
+
+  static validatePublishFolder(folder: string): { valid: boolean; error?: string } {
+    if (!folder) return { valid: true }; // Пустая папка допустима
+    
+    // Проверка на path traversal
+    if (folder.includes('..')) {
+      return { valid: false, error: 'Path traversal not allowed' };
+    }
+    
+    return { valid: true };
+  }
+
+  static validateTagName(tagName: string): { valid: boolean; error?: string } {
+    if (!tagName || tagName.trim().length === 0) {
+      return { valid: false, error: 'Tag name cannot be empty' };
+    }
+    
+    // Проверка на недопустимые символы
+    if (!/^[a-zA-Z0-9_-]+$/.test(tagName.replace(/^#+/, ''))) {
+      return { valid: false, error: 'Tag name contains invalid characters' };
+    }
+    
+    return { valid: true };
+  }
+}
+
+/**
+ * Вкладка настроек плагина с валидацией
+ */
 export class Note2CMSSettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: Note2CMSPublisher) { super(app, plugin); }
 
   display(): void {
-    const { containerEl } = this; containerEl.empty();
+    const { containerEl } = this;
+    containerEl.empty();
     const heading = new Setting(containerEl)
       .setName('Own what you publish')
       .setHeading();
@@ -55,21 +110,36 @@ export class Note2CMSSettingTab extends PluginSettingTab {
     githubLink.setAttr('target', '_blank');
     githubLink.setAttr('rel', 'noopener noreferrer');
 
-    new Setting(containerEl).setName('API URL').addText(t => t
-      .setValue(this.plugin.settings.apiUrl)
-      .onChange((v) => { void this.updateSetting('apiUrl', v); }));
+    new Setting(containerEl)
+      .setName('API URL')
+      .setDesc('URL of your CMS API endpoint')
+      .addText(t => {
+        t.setValue(this.plugin.settings.apiUrl)
+          .onChange((v) => { void this.updateSettingWithValidation('apiUrl', v, SettingsValidator.validateApiUrl); });
+        return t;
+      });
 
-    new Setting(containerEl).setName('API token').addText(t => t
-      .setValue(this.plugin.settings.apiToken)
-      .onChange((v) => { void this.updateSetting('apiToken', v); })
-      .inputEl.setAttribute('type', 'password'));
+    new Setting(containerEl)
+      .setName('API token')
+      .setDesc('Authentication token for API access')
+      .addText(t => {
+        t.setValue(this.plugin.settings.apiToken)
+          .onChange((v) => { void this.updateSettingWithValidation('apiToken', v, SettingsValidator.validateApiToken); });
+        t.inputEl.setAttribute('type', 'password');
+        return t;
+      });
 
     new Setting(containerEl).setName('Test connection').addButton(b => b
       .setButtonText('Test').onClick(() => { void this.handleTestConnection(); }));
 
-    new Setting(containerEl).setName('Publish folder').addText(t => t
-      .setValue(this.plugin.settings.publishFolder)
-      .onChange((v) => { void this.updateSetting('publishFolder', v); }));
+    new Setting(containerEl)
+      .setName('Publish folder')
+      .setDesc('Folder containing notes to publish')
+      .addText(t => {
+        t.setValue(this.plugin.settings.publishFolder)
+          .onChange((v) => { void this.updateSettingWithValidation('publishFolder', v, SettingsValidator.validatePublishFolder); });
+        return t;
+      });
 
     new Setting(containerEl).setName('Auto publish on change').addToggle(t => t
       .setValue(this.plugin.settings.autoPublish)
@@ -83,9 +153,23 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .setValue(this.plugin.settings.wifiOnly)
       .onChange((v) => { void this.updateSetting('wifiOnly', v); }));
 
-    new Setting(containerEl).setName('Support #publish tag').addToggle(t => t
-      .setValue(this.plugin.settings.supportPublishTag)
-      .onChange((v) => { void this.updateSetting('supportPublishTag', v); }));
+    new Setting(containerEl)
+      .setName('Support #publish tag')
+      .setDesc('Allow publishing notes with specific tag')
+      .addToggle(t => {
+        t.setValue(this.plugin.settings.supportPublishTag)
+          .onChange((v) => { void this.updateSetting('supportPublishTag', v); });
+        return t;
+      });
+
+    new Setting(containerEl)
+      .setName('Publish tag name')
+      .setDesc('Tag name for publishing (without #)')
+      .addText(t => {
+        t.setValue(this.plugin.settings.publishTagName)
+          .onChange((v) => { void this.updateSettingWithValidation('publishTagName', v, SettingsValidator.validateTagName); });
+        return t;
+      });
 
     new Setting(containerEl).setName('Frontmatter mode').addDropdown((d) => d
       .addOption('smart_normalize', 'Smart normalize')
@@ -112,13 +196,50 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .setButtonText('Clear').onClick(() => { void this.plugin.queueManager.clearQueue(); }));
   }
 
+  /**
+   * Обновляет настройку без валидации
+   */
   private async updateSetting<K extends keyof Note2CMSSettings>(key: K, value: Note2CMSSettings[K]) {
     this.plugin.settings[key] = value;
     await this.plugin.saveSettings();
   }
 
+  /**
+   * Обновляет настройку с валидацией
+   */
+  private async updateSettingWithValidation<K extends keyof Note2CMSSettings>(
+    key: K,
+    value: Note2CMSSettings[K],
+    validator: (val: string) => { valid: boolean; error?: string }
+  ) {
+    const validation = validator(value as string);
+    if (!validation.valid) {
+      new Notice(`Validation error: ${validation.error}`);
+      return;
+    }
+    
+    this.plugin.settings[key] = value;
+    await this.plugin.saveSettings();
+  }
+
+  /**
+   * Обрабатывает тестирование соединения
+   */
   private async handleTestConnection() {
+    // Валидация перед тестированием
+    const urlValidation = SettingsValidator.validateApiUrl(this.plugin.settings.apiUrl);
+    if (!urlValidation.valid) {
+      new Notice(`Invalid API URL: ${urlValidation.error}`);
+      return;
+    }
+
+    const tokenValidation = SettingsValidator.validateApiToken(this.plugin.settings.apiToken);
+    if (!tokenValidation.valid) {
+      new Notice(`Invalid API token: ${tokenValidation.error}`);
+      return;
+    }
+
     const res = await this.plugin.testConnection();
-    new Notice(res.success ? 'Success' : `Failed: ${res.error}`);
+    new Notice(res.success ? 'Connection successful' : `Connection failed: ${res.error}`);
   }
 }

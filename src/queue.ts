@@ -1,6 +1,11 @@
 import { Notice, Modal, App, TFile } from 'obsidian';
 import Note2CMSPublisher from './main';
 
+// Константы для управления очередью
+const MAX_RETRY_COUNT = 3;
+const NOTICE_DURATION_MS = 4000;
+const WIFI_CHECK_NOTICE_DURATION_MS = 3000;
+
 export type QueueStatus = 'pending' | 'success' | 'failed';
 
 export interface QueueItem {
@@ -12,8 +17,14 @@ export interface QueueItem {
   status: QueueStatus;
 }
 
+/**
+ * Менеджер очереди публикации с защитой от бесконечных повторов
+ * и оптимизированным сохранением состояния.
+ */
 export class PublishQueueManager {
   private queue: QueueItem[] = [];
+  private saveScheduled = false;
+  
   constructor(private app: App, private plugin: Note2CMSPublisher) {}
 
   initialize() { this.loadQueue(); }
@@ -28,18 +39,29 @@ export class PublishQueueManager {
       status: 'pending',
     });
     await this.saveQueue();
-    new Notice(`Queued: ${file.basename} (${reason})`, 4000);
+    new Notice(`Queued: ${file.basename} (${reason})`, NOTICE_DURATION_MS);
   }
 
   async processQueue() {
     if (this.queue.length === 0) return;
+    
     const conn = (navigator as Navigator & { connection?: { type?: string } }).connection;
     if (this.plugin.settings.wifiOnly && conn?.type !== 'wifi') {
-      new Notice('Waiting for wifi...', 3000);
+      new Notice('Waiting for wifi...', WIFI_CHECK_NOTICE_DURATION_MS);
       return;
     }
 
+    let queueModified = false;
+    
     for (const item of [...this.queue]) {
+      // Проверка лимита повторов
+      if (item.retries >= MAX_RETRY_COUNT) {
+        item.status = 'failed';
+        new Notice(`Max retries exceeded for: ${item.filePath}`, NOTICE_DURATION_MS);
+        queueModified = true;
+        continue;
+      }
+      
       try {
         // Читаем актуальный контент файла
         const file = this.app.vault.getAbstractFileByPath(item.filePath);
@@ -51,16 +73,22 @@ export class PublishQueueManager {
         await this.plugin.publishContent(content, item.filePath);
         item.status = 'success';
         new Notice(`Published: ${item.filePath}`);
+        queueModified = true;
       } catch (e: unknown) {
         item.retries++;
         const msg = this.errorMessage(e);
-        new Notice(`Failed: ${msg}`);
+        new Notice(`Failed (retry ${item.retries}/${MAX_RETRY_COUNT}): ${msg}`);
+        queueModified = true;
       }
-      await this.saveQueue();
     }
     
-    this.queue = this.queue.filter((i) => i.status !== 'success');
-    await this.saveQueue();
+    // Удаляем успешные и проваленные элементы
+    const beforeLength = this.queue.length;
+    this.queue = this.queue.filter((i) => i.status === 'pending');
+    
+    if (queueModified || this.queue.length !== beforeLength) {
+      await this.saveQueue();
+    }
   }
 
   getQueueLength(): number { return this.queue.filter(i => i.status === 'pending').length; }
@@ -78,9 +106,18 @@ export class PublishQueueManager {
     this.queue = this.plugin.settings.queue || [];
   }
 
+  /**
+   * Оптимизированное сохранение очереди с debounce
+   */
   private async saveQueue() {
+    if (this.saveScheduled) return;
+    
+    this.saveScheduled = true;
+    await Promise.resolve(); // Микротаск для батчинга
+    
     this.plugin.settings.queue = this.queue;
     await this.plugin.saveSettings();
+    this.saveScheduled = false;
   }
 
   private errorMessage(e: unknown): string {
