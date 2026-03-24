@@ -3,7 +3,8 @@
     "baseUrl": ".",
     "module": "ESNext",
     "moduleResolution": "node",
-    "target": "ES6",
+    "target": "ES2018",
+    "strict": true,
     "skipLibCheck": true,
     "lib": [
       "DOM",

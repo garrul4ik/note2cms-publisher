@@ -40,10 +40,10 @@ function errorMessage(e: unknown): string {
  * Главный класс плагина для публикации заметок в CMS
  */
 export default class Note2CMSPublisher extends Plugin {
-  settings: Note2CMSSettings;
-  settingTab: Note2CMSSettingTab;
-  queueManager: PublishQueueManager;
-  publisher: Publisher;
+  settings!: Note2CMSSettings;
+  settingTab!: Note2CMSSettingTab;
+  queueManager!: PublishQueueManager;
+  publisher!: Publisher;
   private autoPublishTimers: Record<string, number> = {};
   private publishInProgress = new Set<string>();
   private postsCache: { data: PostSummary[]; timestamp: number } | null = null;

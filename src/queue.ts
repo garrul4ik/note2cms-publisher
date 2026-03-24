@@ -18,12 +18,43 @@ export interface QueueItem {
 }
 
 /**
+ * Type guard для проверки QueueStatus
+ */
+function isQueueStatus(value: unknown): value is QueueStatus {
+  return value === 'pending' || value === 'success' || value === 'failed';
+}
+
+/**
+ * Type guard для проверки QueueItem
+ */
+function isQueueItem(value: unknown): value is QueueItem {
+  if (typeof value !== 'object' || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.id === 'string' &&
+    typeof item.filePath === 'string' &&
+    typeof item.content === 'string' &&
+    typeof item.timestamp === 'number' &&
+    typeof item.retries === 'number' &&
+    isQueueStatus(item.status)
+  );
+}
+
+/**
+ * Type guard для проверки массива QueueItem
+ */
+function isQueueItemArray(value: unknown): value is QueueItem[] {
+  return Array.isArray(value) && value.every(isQueueItem);
+}
+
+/**
  * Менеджер очереди публикации с защитой от бесконечных повторов
  * и оптимизированным сохранением состояния.
  */
 export class PublishQueueManager {
   private queue: QueueItem[] = [];
   private saveScheduled = false;
+  private lastSavedState = '';
   
   constructor(private app: App, private plugin: Note2CMSPublisher) {}
 
@@ -54,6 +85,12 @@ export class PublishQueueManager {
     let queueModified = false;
     
     for (const item of [...this.queue]) {
+      // Type guard проверка
+      if (!isQueueItem(item)) {
+        console.warn('[note2cms] Invalid queue item, skipping:', item);
+        continue;
+      }
+
       // Проверка лимита повторов
       if (item.retries >= MAX_RETRY_COUNT) {
         item.status = 'failed';
@@ -103,11 +140,20 @@ export class PublishQueueManager {
   }
 
   private loadQueue() {
-    this.queue = this.plugin.settings.queue || [];
+    const rawQueue = this.plugin.settings.queue || [];
+    // Валидация загруженной очереди с type guard
+    if (isQueueItemArray(rawQueue)) {
+      this.queue = rawQueue;
+      this.lastSavedState = JSON.stringify(this.queue);
+    } else {
+      console.warn('[note2cms] Invalid queue data, resetting to empty');
+      this.queue = [];
+      this.lastSavedState = '[]';
+    }
   }
 
   /**
-   * Оптимизированное сохранение очереди с debounce
+   * Оптимизированное сохранение очереди с debounce и проверкой изменений
    */
   private async saveQueue() {
     if (this.saveScheduled) return;
@@ -115,8 +161,16 @@ export class PublishQueueManager {
     this.saveScheduled = true;
     await Promise.resolve(); // Микротаск для батчинга
     
+    // Проверка на изменения перед сохранением
+    const currentState = JSON.stringify(this.queue);
+    if (currentState === this.lastSavedState) {
+      this.saveScheduled = false;
+      return;
+    }
+    
     this.plugin.settings.queue = this.queue;
     await this.plugin.saveSettings();
+    this.lastSavedState = currentState;
     this.saveScheduled = false;
   }
 
