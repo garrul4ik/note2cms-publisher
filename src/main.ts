@@ -63,6 +63,7 @@ export default class Note2CMSPublisher extends Plugin {
     this.addCommand({ id: 'bulk-publish-notes', name: 'Bulk publish', callback: () => this.bulkPublishNotes() });
     this.addCommand({ id: 'preview-publish', name: 'Preview note', callback: () => this.previewCurrentNote() });
     this.addCommand({ id: 'manage-posts', name: 'Manage published posts', callback: () => new ManagePostsModal(this.app, this).open() });
+    this.addCommand({ id: 'note2cms:view-queue', name: 'View queue', callback: () => this.queueManager.showQueueModal() });
     this.addRibbonIcon('upload', 'Publish', () => { void this.publishCurrentNote(); });
 
     // Сохраняем обработчик для правильной очистки
