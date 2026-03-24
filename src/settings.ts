@@ -98,6 +98,15 @@ export class Note2CMSSettingTab extends PluginSettingTab {
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
+    
+    this.renderHeader(containerEl);
+    this.renderApiSettings(containerEl);
+    this.renderPublishSettings(containerEl);
+    this.renderBehaviorSettings(containerEl);
+    this.renderQueueSettings(containerEl);
+  }
+
+  private renderHeader(containerEl: HTMLElement): void {
     const heading = new Setting(containerEl)
       .setName('Own what you publish')
       .setHeading();
@@ -109,7 +118,9 @@ export class Note2CMSSettingTab extends PluginSettingTab {
     githubLink.addClass('note2cms-settings-link');
     githubLink.setAttr('target', '_blank');
     githubLink.setAttr('rel', 'noopener noreferrer');
+  }
 
+  private renderApiSettings(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName('API URL')
       .setDesc('URL of your CMS API endpoint')
@@ -131,7 +142,9 @@ export class Note2CMSSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName('Test connection').addButton(b => b
       .setButtonText('Test').onClick(() => { void this.handleTestConnection(); }));
+  }
 
+  private renderPublishSettings(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName('Publish folder')
       .setDesc('Folder containing notes to publish')
@@ -140,18 +153,6 @@ export class Note2CMSSettingTab extends PluginSettingTab {
           .onChange((v) => { void this.updateSettingWithValidation('publishFolder', v, SettingsValidator.validatePublishFolder); });
         return t;
       });
-
-    new Setting(containerEl).setName('Auto publish on change').addToggle(t => t
-      .setValue(this.plugin.settings.autoPublish)
-      .onChange((v) => { void this.updateSetting('autoPublish', v); }));
-
-    new Setting(containerEl).setName('Confirm on mobile').addToggle(t => t
-      .setValue(this.plugin.settings.confirmOnMobile)
-      .onChange((v) => { void this.updateSetting('confirmOnMobile', v); }));
-
-    new Setting(containerEl).setName('Wifi only').addToggle(t => t
-      .setValue(this.plugin.settings.wifiOnly)
-      .onChange((v) => { void this.updateSetting('wifiOnly', v); }));
 
     new Setting(containerEl)
       .setName('Support #publish tag')
@@ -170,11 +171,25 @@ export class Note2CMSSettingTab extends PluginSettingTab {
           .onChange((v) => { void this.updateSettingWithValidation('publishTagName', v, SettingsValidator.validateTagName); });
         return t;
       });
+  }
+
+  private renderBehaviorSettings(containerEl: HTMLElement): void {
+    new Setting(containerEl).setName('Auto publish on change').addToggle(t => t
+      .setValue(this.plugin.settings.autoPublish)
+      .onChange((v) => { void this.updateSetting('autoPublish', v); }));
+
+    new Setting(containerEl).setName('Confirm on mobile').addToggle(t => t
+      .setValue(this.plugin.settings.confirmOnMobile)
+      .onChange((v) => { void this.updateSetting('confirmOnMobile', v); }));
+
+    new Setting(containerEl).setName('Wifi only').addToggle(t => t
+      .setValue(this.plugin.settings.wifiOnly)
+      .onChange((v) => { void this.updateSetting('wifiOnly', v); }));
 
     new Setting(containerEl).setName('Frontmatter mode').addDropdown((d) => d
       .addOption('smart_normalize', 'Smart normalize')
       .setValue(this.plugin.settings.frontmatterMode)
-      .onChange((v: 'smart_normalize') => { void this.updateSetting('frontmatterMode', v); }));
+      .onChange((v) => { void this.updateSetting('frontmatterMode', v as 'smart_normalize'); }));
 
     new Setting(containerEl).setName('Show quick-fix modal').addToggle((t) => t
       .setValue(this.plugin.settings.showQuickFixModal)
@@ -185,10 +200,12 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .addOption('publish_only', 'Publish only')
       .addOption('publish_and_save', 'Publish and save')
       .setValue(this.plugin.settings.defaultWritebackAction)
-      .onChange((v: 'ask' | 'publish_only' | 'publish_and_save') => {
-        void this.updateSetting('defaultWritebackAction', v);
+      .onChange((v) => {
+        void this.updateSetting('defaultWritebackAction', v as 'ask' | 'publish_only' | 'publish_and_save');
       }));
+  }
 
+  private renderQueueSettings(containerEl: HTMLElement): void {
     new Setting(containerEl).setName('View queue').addButton(b => b
       .setButtonText('View').onClick(() => { this.plugin.queueManager.showQueueModal(); }));
 
