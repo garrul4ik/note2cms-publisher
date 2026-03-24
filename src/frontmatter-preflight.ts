@@ -101,6 +101,9 @@ function parseLooseFrontmatter(frontmatterText: string): { data: Record<string, 
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) continue;
 
+    // Note: .+ is safe here as we process user's local frontmatter line-by-line
+    // with typical line length < 200 chars. This is a recovery mechanism for
+    // iOS keyboard issues, not external input validation.
     const colonMatch = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+)$/);
     if (colonMatch) {
       const key = colonMatch[1];
@@ -256,15 +259,30 @@ export function runFrontmatterPreflight(ctx: PreflightContext): PreflightResult 
   let parsedFrontmatter: Record<string, unknown> | null = null;
   if (parsedDocument.frontmatterText) {
     try {
-      parsedFrontmatter = asRecord(parseYaml(parsedDocument.frontmatterText));
-      if (!parsedFrontmatter) {
+      // Protection against YAML bombs: limit frontmatter size
+      const MAX_FRONTMATTER_SIZE = 10000; // 10KB
+      if (parsedDocument.frontmatterText.length > MAX_FRONTMATTER_SIZE) {
+        console.warn('[note2cms] Frontmatter too large, using loose parser');
+        const recovered = parseLooseFrontmatter(parsedDocument.frontmatterText);
+        parsedFrontmatter = recovered.data;
         issues.push({
-          code: 'frontmatter-not-object',
-          message: 'Frontmatter was not an object and was rebuilt.',
+          code: 'frontmatter-too-large',
+          message: 'Frontmatter was too large and was parsed with fallback method.',
           severity: 'warning',
         });
+      } else {
+        parsedFrontmatter = asRecord(parseYaml(parsedDocument.frontmatterText));
+        if (!parsedFrontmatter) {
+          console.warn('[note2cms] Frontmatter is not an object:', parsedDocument.frontmatterText);
+          issues.push({
+            code: 'frontmatter-not-object',
+            message: 'Frontmatter was not an object and was rebuilt.',
+            severity: 'warning',
+          });
+        }
       }
-    } catch {
+    } catch (error) {
+      console.error('[note2cms] YAML parse error:', error);
       const recovered = parseLooseFrontmatter(parsedDocument.frontmatterText);
       if (Object.keys(recovered.data).length > 0) {
         parsedFrontmatter = recovered.data;

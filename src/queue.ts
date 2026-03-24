@@ -18,11 +18,11 @@ export class PublishQueueManager {
 
   initialize() { this.loadQueue(); }
 
-  async addToQueue(file: TFile, content: string, reason: string) {
+  async addToQueue(file: TFile, reason: string) {
     this.queue.push({
-      id: `q_${Date.now()}`,
+      id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       filePath: file.path,
-      content,
+      content: '', // Не сохраняем контент, будем читать при публикации
       timestamp: Date.now(),
       retries: 0,
       status: 'pending',
@@ -41,7 +41,14 @@ export class PublishQueueManager {
 
     for (const item of [...this.queue]) {
       try {
-        await this.plugin.publishContent(item.content, item.filePath);
+        // Читаем актуальный контент файла
+        const file = this.app.vault.getAbstractFileByPath(item.filePath);
+        if (!(file instanceof TFile)) {
+          throw new Error('File not found');
+        }
+        const content = await this.app.vault.read(file);
+        
+        await this.plugin.publishContent(content, item.filePath);
         item.status = 'success';
         new Notice(`Published: ${item.filePath}`);
       } catch (e: unknown) {
@@ -51,7 +58,9 @@ export class PublishQueueManager {
       }
       await this.saveQueue();
     }
-    this.queue = this.queue.filter(i => i.status !== 'success');
+    
+    this.queue = this.queue.filter((i) => i.status !== 'success');
+    await this.saveQueue();
   }
 
   getQueueLength(): number { return this.queue.filter(i => i.status === 'pending').length; }

@@ -33,6 +33,7 @@ export default class Note2CMSPublisher extends Plugin {
   queueManager: PublishQueueManager;
   publisher: Publisher;
   private autoPublishTimers: Record<string, number> = {};
+  private publishInProgress = new Set<string>();
 
   async onload() {
     await this.loadSettings();
@@ -53,6 +54,12 @@ export default class Note2CMSPublisher extends Plugin {
     this.registerEvent(this.app.vault.on('modify', (file) => this.onFileModified(file)));
 
     window.note2cmsPlugin = this;
+  }
+
+  onunload() {
+    // Очистить все активные таймеры автопубликации
+    Object.values(this.autoPublishTimers).forEach(timer => window.clearTimeout(timer));
+    this.autoPublishTimers = {};
   }
 
   async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
@@ -79,8 +86,7 @@ export default class Note2CMSPublisher extends Plugin {
     if (!ignoreFilters && !this.shouldPublish(file)) return new Notice('Not in publish folder or tag');
 
     if (this.settings.wifiOnly && !isWiFiConnected()) {
-      const content = await this.app.vault.read(file);
-      await this.queueManager.addToQueue(file, content, 'Wi-Fi only');
+      await this.queueManager.addToQueue(file, 'Wi-Fi only');
       return;
     }
 
@@ -94,7 +100,7 @@ export default class Note2CMSPublisher extends Plugin {
   async doPublish(file: TFile) {
     const content = await this.app.vault.read(file);
     if (!navigator.onLine) {
-      await this.queueManager.addToQueue(file, content, 'Offline');
+      await this.queueManager.addToQueue(file, 'Offline');
       return;
     }
 
@@ -104,7 +110,7 @@ export default class Note2CMSPublisher extends Plugin {
       if (result.permalink) new PermalinkModal(this.app, result.permalink).open();
     } else {
       new Notice(`Failed: ${result.error}`);
-      await this.queueManager.addToQueue(file, content, 'Error');
+      await this.queueManager.addToQueue(file, 'Error');
     }
   }
 
@@ -174,21 +180,34 @@ export default class Note2CMSPublisher extends Plugin {
   }
 
   private onFileModified(file: TAbstractFile) {
-    if (!this.settings.autoPublish) return;
     if (!(file instanceof TFile)) return;
-    if (file.extension !== 'md') return;
-    if (!this.shouldPublish(file)) return;
-
-    const existing = this.autoPublishTimers[file.path];
-    if (existing) window.clearTimeout(existing);
-
+    if (!this.settings.autoPublish) return;
+    
+    const shouldPublish = this.settings.publishFolder
+      ? isInPublishFolder(file.path, this.settings.publishFolder)
+      : this.settings.supportPublishTag
+      ? hasPublishTag(file, this.app, this.settings.publishTagName)
+      : false;
+    
+    if (!shouldPublish) return;
+    
+    // Отменить предыдущий таймер для этого файла
+    if (this.autoPublishTimers[file.path]) {
+      window.clearTimeout(this.autoPublishTimers[file.path]);
+    }
+    
     this.autoPublishTimers[file.path] = window.setTimeout(() => {
       delete this.autoPublishTimers[file.path];
-      if (isMobileDevice() && this.settings.confirmOnMobile) {
-        new Notice('Auto publish is disabled on mobile while confirmation is enabled');
+      
+      // Проверить, не идёт ли уже публикация этого файла
+      if (this.publishInProgress.has(file.path)) {
         return;
       }
-      void this.doPublish(file);
+      
+      this.publishInProgress.add(file.path);
+      void this.doPublish(file).finally(() => {
+        this.publishInProgress.delete(file.path);
+      });
     }, 500);
   }
 }
