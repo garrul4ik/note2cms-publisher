@@ -62,7 +62,7 @@ export class PublishQueueManager {
 
   async addToQueue(file: TFile, reason: string) {
     this.queue.push({
-      id: `q_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       filePath: file.path,
       content: '', // Не сохраняем контент, будем читать при публикации
       timestamp: Date.now(),

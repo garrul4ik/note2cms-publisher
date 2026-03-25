@@ -123,10 +123,10 @@ export class Note2CMSSettingTab extends PluginSettingTab {
   private renderApiSettings(containerEl: HTMLElement): void {
     new Setting(containerEl)
       .setName('API URL')
-      .setDesc('URL of your CMS API endpoint')
+      .setDesc('The address of your content management system endpoint')
       .addText(t => {
         t.setValue(this.plugin.settings.apiUrl)
-          .onChange((v) => { void this.updateSettingWithValidation('apiUrl', v, SettingsValidator.validateApiUrl); });
+          .onChange(this.handleApiUrlChange);
         return t;
       });
 
@@ -135,7 +135,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .setDesc('Authentication token for API access')
       .addText(t => {
         t.setValue(this.plugin.settings.apiToken)
-          .onChange((v) => { void this.updateSettingWithValidation('apiToken', v, SettingsValidator.validateApiToken); });
+          .onChange(this.handleApiTokenChange);
         t.inputEl.setAttribute('type', 'password');
         return t;
       });
@@ -150,7 +150,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .setDesc('Folder containing notes to publish')
       .addText(t => {
         t.setValue(this.plugin.settings.publishFolder)
-          .onChange((v) => { void this.updateSettingWithValidation('publishFolder', v, SettingsValidator.validatePublishFolder); });
+          .onChange(this.handlePublishFolderChange);
         return t;
       });
 
@@ -168,7 +168,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .setDesc('Tag name for publishing (without #)')
       .addText(t => {
         t.setValue(this.plugin.settings.publishTagName)
-          .onChange((v) => { void this.updateSettingWithValidation('publishTagName', v, SettingsValidator.validateTagName); });
+          .onChange(this.handlePublishTagNameChange);
         return t;
       });
   }
@@ -259,4 +259,23 @@ export class Note2CMSSettingTab extends PluginSettingTab {
     const res = await this.plugin.testConnection();
     new Notice(res.success ? 'Connection successful' : `Connection failed: ${res.error}`);
   }
+
+  /**
+   * Обработчики изменений с привязкой контекста
+   */
+  private readonly handleApiUrlChange = (v: string): void => {
+    void this.updateSettingWithValidation('apiUrl', v, (val: string) => SettingsValidator.validateApiUrl(val));
+  };
+
+  private readonly handleApiTokenChange = (v: string): void => {
+    void this.updateSettingWithValidation('apiToken', v, (val: string) => SettingsValidator.validateApiToken(val));
+  };
+
+  private readonly handlePublishFolderChange = (v: string): void => {
+    void this.updateSettingWithValidation('publishFolder', v, (val: string) => SettingsValidator.validatePublishFolder(val));
+  };
+
+  private readonly handlePublishTagNameChange = (v: string): void => {
+    void this.updateSettingWithValidation('publishTagName', v, (val: string) => SettingsValidator.validateTagName(val));
+  };
 }

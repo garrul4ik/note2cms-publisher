@@ -85,7 +85,7 @@ export default class Note2CMSPublisher extends Plugin {
     delete window.note2cmsPlugin;
   }
 
-  async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData()); }
+  async loadSettings() { this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<Note2CMSSettings>); }
   async saveSettings() { await this.saveData(this.settings); }
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {

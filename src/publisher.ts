@@ -165,7 +165,7 @@ export class Publisher {
         }
 
         // Валидация ответа
-        const result = response.json;
+        const result = response.json as unknown;
         if (typeof result !== 'object' || result === null) {
           console.error('[note2cms] Invalid API response: not an object');
           throw new Error('Invalid response format from server');
