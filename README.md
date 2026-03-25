@@ -330,7 +330,7 @@ src/
 
 ## 🔄 Changelog
 
-### v1.2.1 (2026-03-25)
+### v1.2.1
 **Security Improvements:**
 - Encrypt API token storage with base64 encoding
 - Add strict null checks with type guards for API responses
@@ -368,7 +368,7 @@ src/
 
 ### Prerequisites
 - Node.js 18+
-- npm or yarn
+- npm
 - Obsidian 1.6.0+
 
 ### Setup Development Environment
