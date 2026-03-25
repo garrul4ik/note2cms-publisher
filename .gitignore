@@ -6,3 +6,4 @@ node_modules/
 release/
 CODE_REVIEW_REPORT.md
 REMAINING_ISSUES.md
+.roo/mcp.json
