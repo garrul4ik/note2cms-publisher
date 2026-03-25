@@ -9,9 +9,9 @@ import { PermalinkModal } from './modals/permalink-modal';
 import { BulkModal } from './modals/bulk-modal';
 import { ManagePostsModal } from './modals/manage-posts-modal';
 
-// Константы
+// Constants
 const AUTO_PUBLISH_DEBOUNCE_MS = 500;
-const POSTS_CACHE_TTL_MS = 60000; // 1 минута
+const POSTS_CACHE_TTL_MS = 60000; // 1 minute
 
 export interface PostSummary {
   slug: string;
@@ -26,7 +26,7 @@ declare global {
 }
 
 /**
- * Главный класс плагина для публикации заметок в CMS
+ * Main plugin class for publishing notes to CMS
  */
 export default class Note2CMSPublisher extends Plugin {
   settings!: Note2CMSSettings;
@@ -212,10 +212,10 @@ export default class Note2CMSPublisher extends Plugin {
   }
 
   /**
-   * Получает список постов с кешированием
+   * Fetches posts list with caching
    */
   async fetchPosts(): Promise<PostSummary[]> {
-    // Проверка кеша
+    // Check cache
     if (this.postsCache && Date.now() - this.postsCache.timestamp < POSTS_CACHE_TTL_MS) {
       return this.postsCache.data;
     }
@@ -229,7 +229,7 @@ export default class Note2CMSPublisher extends Plugin {
   }
   
   /**
-   * Инвалидирует кеш постов
+   * Invalidates posts cache
    */
   invalidatePostsCache(): void {
     this.postsCache = null;
@@ -245,7 +245,7 @@ export default class Note2CMSPublisher extends Plugin {
     if (!(file instanceof TFile)) return;
     if (!this.settings.autoPublish) return;
     
-    // Проверить, не идёт ли уже публикация этого файла (ДО установки таймера)
+    // Check if file is already being published (BEFORE setting timer)
     if (this.publishInProgress.has(file.path)) {
       return;
     }
@@ -258,7 +258,7 @@ export default class Note2CMSPublisher extends Plugin {
     
     if (!shouldPublish) return;
     
-    // Отменить предыдущий таймер для этого файла
+    // Cancel previous timer for this file
     if (this.autoPublishTimers[file.path]) {
       window.clearTimeout(this.autoPublishTimers[file.path]);
     }
@@ -266,7 +266,7 @@ export default class Note2CMSPublisher extends Plugin {
     this.autoPublishTimers[file.path] = window.setTimeout(() => {
       delete this.autoPublishTimers[file.path];
       
-      // Двойная проверка перед публикацией
+      // Double check before publishing
       if (this.publishInProgress.has(file.path)) {
         return;
       }

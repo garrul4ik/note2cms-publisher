@@ -1,31 +1,31 @@
 import { TFile, App, Platform } from 'obsidian';
 
 /**
- * Кеш для проверки WiFi соединения
+ * Cache for WiFi connection check
  */
 let wifiCheckCache: { result: boolean; timestamp: number } | null = null;
-const WIFI_CHECK_CACHE_TTL = 5000; // 5 секунд
+const WIFI_CHECK_CACHE_TTL = 5000; // 5 seconds
 
 /**
- * Проверяет, является ли устройство мобильным
+ * Checks if device is mobile
  */
 export function isMobileDevice(): boolean {
   return Platform.isMobile;
 }
 
 /**
- * Проверяет WiFi соединение с кешированием результата.
- * Безопасное значение по умолчанию: false (требует явного подтверждения WiFi).
+ * Checks WiFi connection with result caching.
+ * Safe default value: false (requires explicit WiFi confirmation).
  */
 export function isWiFiConnected(): boolean {
-  // Проверка кеша
+  // Check cache
   if (wifiCheckCache && Date.now() - wifiCheckCache.timestamp < WIFI_CHECK_CACHE_TTL) {
     return wifiCheckCache.result;
   }
 
   const conn = (navigator as Navigator & { connection?: { type?: string } }).connection;
   
-  // Безопасное значение по умолчанию: false (не WiFi)
+  // Safe default value: false (not WiFi)
   if (!conn || !conn.type) {
     const result = false;
     wifiCheckCache = { result, timestamp: Date.now() };
@@ -38,13 +38,13 @@ export function isWiFiConnected(): boolean {
 }
 
 /**
- * Проверяет наличие тега публикации в файле.
- * Безопасная проверка с валидацией входных данных.
+ * Checks for publish tag in file.
+ * Safe check with input validation.
  */
 export function hasPublishTag(file: TFile, app: App, tagName: string): boolean {
   if (!file || !app || !tagName) return false;
   
-  // Валидация имени тега
+  // Tag name validation
   const sanitizedTag = tagName.trim().replace(/^#+/, '');
   if (!sanitizedTag || sanitizedTag.length === 0) return false;
   
@@ -59,17 +59,17 @@ export function hasPublishTag(file: TFile, app: App, tagName: string): boolean {
 }
 
 /**
- * Проверяет, находится ли файл в указанной папке публикации.
- * Защита от path traversal атак.
+ * Checks if file is in specified publish folder.
+ * Protection against path traversal attacks.
  */
 export function isInPublishFolder(filePath: string, folder: string): boolean {
   if (!folder) return false;
   
-  // Нормализация путей и защита от path traversal
+  // Path normalization and path traversal protection
   const normalizedFolder = folder.replace(/^\/+|\/+$/g, '').replace(/\\/g, '/');
   const normalizedPath = filePath.replace(/\\/g, '/');
   
-  // Проверка на попытки path traversal
+  // Check for path traversal attempts
   if (normalizedFolder.includes('..') || normalizedPath.includes('..')) {
     return false;
   }
@@ -78,7 +78,7 @@ export function isInPublishFolder(filePath: string, folder: string): boolean {
 }
 
 /**
- * Преобразует ошибку в читаемое сообщение
+ * Converts error to readable message
  */
 export function formatError(e: unknown): string {
   if (e instanceof Error) return e.message;

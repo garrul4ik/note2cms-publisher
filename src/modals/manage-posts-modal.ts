@@ -75,7 +75,7 @@ export class ManagePostsModal extends Modal {
     if (!confirmed) return;
     const ok = await this.plugin.deletePost(post.slug);
     if (ok) {
-      this.plugin.invalidatePostsCache(); // Инвалидация кеша после удаления
+      this.plugin.invalidatePostsCache(); // Invalidate cache after deletion
       this.posts = this.posts.filter(p => p.slug !== post.slug);
       this.filtered = this.filtered.filter(p => p.slug !== post.slug);
       new Notice('Deleted');

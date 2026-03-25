@@ -1,5 +1,5 @@
 /**
- * Rate limiter для контроля количества одновременных запросов к API
+ * Rate limiter to control concurrent API requests
  */
 export class RateLimiter {
   private queue: Array<() => void> = [];
@@ -11,10 +11,10 @@ export class RateLimiter {
   ) {}
 
   /**
-   * Выполняет функцию с учетом лимита одновременных запросов
+   * Executes function with concurrent request limit
    */
   async execute<T>(fn: () => Promise<T>): Promise<T> {
-    // Ждем, пока освободится слот
+    // Wait until a slot is available
     while (this.running >= this.maxConcurrent) {
       await new Promise<void>(resolve => {
         this.queue.push(resolve);
@@ -25,7 +25,7 @@ export class RateLimiter {
     try {
       const result = await fn();
       
-      // Добавляем задержку между запросами
+      // Add delay between requests
       if (this.delayMs > 0) {
         await new Promise(resolve => setTimeout(resolve, this.delayMs));
       }
@@ -34,7 +34,7 @@ export class RateLimiter {
     } finally {
       this.running--;
       
-      // Освобождаем следующий запрос из очереди
+      // Release next request from queue
       const next = this.queue.shift();
       if (next) {
         next();
@@ -43,14 +43,14 @@ export class RateLimiter {
   }
 
   /**
-   * Возвращает количество запросов в процессе выполнения
+   * Returns number of requests in progress
    */
   getRunningCount(): number {
     return this.running;
   }
 
   /**
-   * Возвращает количество запросов в очереди
+   * Returns number of requests in queue
    */
   getQueueLength(): number {
     return this.queue.length;

@@ -43,7 +43,7 @@ export class EditPostModal extends Modal {
     try {
       await this.plugin.publishRawMarkdown(editor.value);
       new Notice('Post updated');
-      this.plugin.invalidatePostsCache(); // Инвалидация кеша после обновления
+      this.plugin.invalidatePostsCache(); // Invalidate cache after update
       await this.onSaved();
       this.close();
     } catch (e: unknown) {

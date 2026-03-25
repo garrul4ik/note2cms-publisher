@@ -5,7 +5,7 @@ import { showQuickFixModal, type QuickFixAction, type QuickFixResult } from './q
 import { formatError } from './utils';
 import { RateLimiter } from './rate-limiter';
 
-// Константы
+// Constants
 const REQUEST_TIMEOUT_MS = 30000;
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
@@ -192,14 +192,14 @@ export class Publisher {
             throw new Error(`HTTP ${response.status}: ${response.text || 'Unknown error'}`);
           }
 
-          // Валидация ответа с type guard
+          // Validate response with type guard
           const result = response.json as unknown;
           if (!isPublishApiResponse(result)) {
             console.error('[note2cms] Invalid API response format');
             throw new Error('Invalid response format from server');
           }
 
-          // Успешный ответ - возвращаем результат
+          // Successful response - return result
           return {
             success: true,
             permalink: result.permalink || result.url,

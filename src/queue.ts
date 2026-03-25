@@ -2,7 +2,7 @@ import { Notice, Modal, App, TFile } from 'obsidian';
 import Note2CMSPublisher from './main';
 import { formatError } from './utils';
 
-// Константы для управления очередью
+// Queue management constants
 const MAX_RETRY_COUNT = 3;
 const NOTICE_DURATION_MS = 4000;
 const WIFI_CHECK_NOTICE_DURATION_MS = 3000;
@@ -19,14 +19,14 @@ export interface QueueItem {
 }
 
 /**
- * Type guard для проверки QueueStatus
+ * Type guard to validate QueueStatus
  */
 function isQueueStatus(value: unknown): value is QueueStatus {
   return value === 'pending' || value === 'success' || value === 'failed';
 }
 
 /**
- * Type guard для проверки QueueItem
+ * Type guard to validate QueueItem
  */
 function isQueueItem(value: unknown): value is QueueItem {
   if (typeof value !== 'object' || value === null) return false;
@@ -42,15 +42,15 @@ function isQueueItem(value: unknown): value is QueueItem {
 }
 
 /**
- * Type guard для проверки массива QueueItem
+ * Type guard to validate QueueItem array
  */
 function isQueueItemArray(value: unknown): value is QueueItem[] {
   return Array.isArray(value) && value.every(isQueueItem);
 }
 
 /**
- * Менеджер очереди публикации с защитой от бесконечных повторов
- * и оптимизированным сохранением состояния.
+ * Publish queue manager with infinite retry protection
+ * and optimized state persistence.
  */
 export class PublishQueueManager {
   private queue: QueueItem[] = [];
@@ -65,7 +65,7 @@ export class PublishQueueManager {
     this.queue.push({
       id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
       filePath: file.path,
-      content: '', // Не сохраняем контент, будем читать при публикации
+      content: '', // Don't save content, will read on publish
       timestamp: Date.now(),
       retries: 0,
       status: 'pending',
@@ -86,13 +86,13 @@ export class PublishQueueManager {
     let queueModified = false;
     
     for (const item of [...this.queue]) {
-      // Type guard проверка
+      // Type guard validation
       if (!isQueueItem(item)) {
         console.warn('[note2cms] Invalid queue item, skipping:', item);
         continue;
       }
 
-      // Проверка лимита повторов
+      // Check retry limit
       if (item.retries >= MAX_RETRY_COUNT) {
         item.status = 'failed';
         new Notice(`Max retries exceeded for: ${item.filePath}`, NOTICE_DURATION_MS);
@@ -101,7 +101,7 @@ export class PublishQueueManager {
       }
       
       try {
-        // Читаем актуальный контент файла
+        // Read current file content
         const file = this.app.vault.getAbstractFileByPath(item.filePath);
         if (!(file instanceof TFile)) {
           throw new Error('File not found');
@@ -120,7 +120,7 @@ export class PublishQueueManager {
       }
     }
     
-    // Удаляем успешные и проваленные элементы
+    // Remove successful and failed items
     const beforeLength = this.queue.length;
     this.queue = this.queue.filter((i) => i.status === 'pending');
     
@@ -142,7 +142,7 @@ export class PublishQueueManager {
 
   private loadQueue() {
     const rawQueue = this.plugin.settings.queue || [];
-    // Валидация загруженной очереди с type guard
+    // Validate loaded queue with type guard
     if (isQueueItemArray(rawQueue)) {
       this.queue = rawQueue;
       this.lastSavedState = JSON.stringify(this.queue);
@@ -154,15 +154,15 @@ export class PublishQueueManager {
   }
 
   /**
-   * Оптимизированное сохранение очереди с debounce и проверкой изменений
+   * Optimized queue save with debounce and change detection
    */
   private async saveQueue() {
     if (this.saveScheduled) return;
     
     this.saveScheduled = true;
-    await Promise.resolve(); // Микротаск для батчинга
+    await Promise.resolve(); // Microtask for batching
     
-    // Проверка на изменения перед сохранением
+    // Check for changes before saving
     const currentState = JSON.stringify(this.queue);
     if (currentState === this.lastSavedState) {
       this.saveScheduled = false;

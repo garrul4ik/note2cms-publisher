@@ -13,8 +13,6 @@ export interface Note2CMSSettings {
   wifiOnly: boolean;
   supportPublishTag: boolean;
   publishTagName: string;
-  queueRetryCount: number;
-  queueRetryDelay: number;
   frontmatterMode: 'smart_normalize';
   showQuickFixModal: boolean;
   defaultWritebackAction: 'ask' | 'publish_only' | 'publish_and_save';
@@ -31,8 +29,6 @@ export const DEFAULT_SETTINGS: Note2CMSSettings = {
   wifiOnly: false,
   supportPublishTag: true,
   publishTagName: 'publish',
-  queueRetryCount: 3,
-  queueRetryDelay: 60000,
   frontmatterMode: 'smart_normalize',
   showQuickFixModal: true,
   defaultWritebackAction: 'ask',
@@ -40,7 +36,7 @@ export const DEFAULT_SETTINGS: Note2CMSSettings = {
 };
 
 /**
- * Валидатор настроек плагина
+ * Plugin settings validator
  */
 class SettingsValidator {
   static validateApiUrl(url: string): { valid: boolean; error?: string } {
@@ -66,9 +62,9 @@ class SettingsValidator {
   }
 
   static validatePublishFolder(folder: string): { valid: boolean; error?: string } {
-    if (!folder) return { valid: true }; // Пустая папка допустима
+    if (!folder) return { valid: true }; // Empty folder is allowed
     
-    // Проверка на path traversal
+    // Check for path traversal
     if (folder.includes('..')) {
       return { valid: false, error: 'Path traversal not allowed' };
     }
@@ -81,7 +77,7 @@ class SettingsValidator {
       return { valid: false, error: 'Tag name cannot be empty' };
     }
     
-    // Проверка на недопустимые символы
+    // Check for invalid characters
     if (!/^[a-zA-Z0-9_-]+$/.test(tagName.replace(/^#+/, ''))) {
       return { valid: false, error: 'Tag name contains invalid characters' };
     }
@@ -91,7 +87,7 @@ class SettingsValidator {
 }
 
 /**
- * Вкладка настроек плагина с валидацией
+ * Plugin settings tab with validation
  */
 export class Note2CMSSettingTab extends PluginSettingTab {
   constructor(app: App, private plugin: Note2CMSPublisher) { super(app, plugin); }
@@ -215,7 +211,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Обновляет настройку без валидации
+   * Updates setting without validation
    */
   private async updateSetting<K extends keyof Note2CMSSettings>(key: K, value: Note2CMSSettings[K]) {
     this.plugin.settings[key] = value;
@@ -223,7 +219,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Обновляет настройку с валидацией
+   * Updates setting with validation
    */
   private async updateSettingWithValidation<K extends keyof Note2CMSSettings>(
     key: K,
@@ -241,10 +237,10 @@ export class Note2CMSSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Обрабатывает тестирование соединения
+   * Handles connection testing
    */
   private async handleTestConnection() {
-    // Валидация перед тестированием
+    // Validation before testing
     const urlValidation = SettingsValidator.validateApiUrl(this.plugin.settings.apiUrl);
     if (!urlValidation.valid) {
       new Notice(`Invalid API URL: ${urlValidation.error}`);
@@ -262,7 +258,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
   }
 
   /**
-   * Обработчики изменений с привязкой контекста
+   * Change handlers with bound context
    */
   private readonly handleApiUrlChange = (v: string): void => {
     void this.updateSettingWithValidation('apiUrl', v, (val: string) => SettingsValidator.validateApiUrl(val));
