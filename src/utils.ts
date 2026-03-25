@@ -76,3 +76,16 @@ export function isInPublishFolder(filePath: string, folder: string): boolean {
   
   return normalizedPath === normalizedFolder || normalizedPath.startsWith(`${normalizedFolder}/`);
 }
+
+/**
+ * Преобразует ошибку в читаемое сообщение
+ */
+export function formatError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return 'Unknown error';
+  }
+}

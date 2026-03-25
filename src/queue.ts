@@ -1,5 +1,6 @@
 import { Notice, Modal, App, TFile } from 'obsidian';
 import Note2CMSPublisher from './main';
+import { formatError } from './utils';
 
 // Константы для управления очередью
 const MAX_RETRY_COUNT = 3;
@@ -113,7 +114,7 @@ export class PublishQueueManager {
         queueModified = true;
       } catch (e: unknown) {
         item.retries++;
-        const msg = this.errorMessage(e);
+        const msg = formatError(e);
         new Notice(`Failed (retry ${item.retries}/${MAX_RETRY_COUNT}): ${msg}`);
         queueModified = true;
       }
@@ -172,16 +173,6 @@ export class PublishQueueManager {
     await this.plugin.saveSettings();
     this.lastSavedState = currentState;
     this.saveScheduled = false;
-  }
-
-  private errorMessage(e: unknown): string {
-    if (e instanceof Error) return e.message;
-    if (typeof e === 'string') return e;
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return 'Unknown error';
-    }
   }
 }
 

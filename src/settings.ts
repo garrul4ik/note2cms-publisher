@@ -5,6 +5,7 @@ import Note2CMSPublisher from './main';
 export interface Note2CMSSettings {
   apiUrl: string;
   apiToken: string;
+  apiTokenEncoded?: string; // Base64 encoded token for storage
   publishFolder: string;
   autoPublish: boolean;
   includeFrontmatter: boolean;

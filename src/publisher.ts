@@ -2,11 +2,15 @@ import { Notice, TFile, requestUrl } from 'obsidian';
 import Note2CMSPublisher from './main';
 import { runFrontmatterPreflight, type PreflightResult } from './frontmatter-preflight';
 import { showQuickFixModal, type QuickFixAction, type QuickFixResult } from './quick-fix-modal';
+import { formatError } from './utils';
+import { RateLimiter } from './rate-limiter';
 
 // Константы
 const REQUEST_TIMEOUT_MS = 30000;
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
+const RATE_LIMIT_MAX_CONCURRENT = 3;
+const RATE_LIMIT_DELAY_MS = 100;
 
 interface PublishOptions {
   interactive?: boolean;
@@ -16,6 +20,25 @@ interface PublishResponse {
   success: boolean;
   permalink?: string;
   error?: string;
+}
+
+/**
+ * Type guard для проверки API ответа
+ */
+interface PublishApiResponse {
+  permalink?: string;
+  url?: string;
+  error?: string;
+}
+
+function isPublishApiResponse(value: unknown): value is PublishApiResponse {
+  if (typeof value !== 'object' || value === null) return false;
+  const obj = value as Record<string, unknown>;
+  return (
+    (obj.permalink === undefined || typeof obj.permalink === 'string') &&
+    (obj.url === undefined || typeof obj.url === 'string') &&
+    (obj.error === undefined || typeof obj.error === 'string')
+  );
 }
 
 /**
@@ -41,7 +64,11 @@ function mapDefaultAction(value: 'ask' | 'publish_only' | 'publish_and_save'): Q
  * Класс для публикации заметок с автоматическим восстановлением после ошибок
  */
 export class Publisher {
-  constructor(private plugin: Note2CMSPublisher) {}
+  private rateLimiter: RateLimiter;
+
+  constructor(private plugin: Note2CMSPublisher) {
+    this.rateLimiter = new RateLimiter(RATE_LIMIT_MAX_CONCURRENT, RATE_LIMIT_DELAY_MS);
+  }
 
   /**
    * Публикует контент с предварительной проверкой frontmatter
@@ -136,82 +163,64 @@ export class Publisher {
   }
 
   /**
-   * Отправляет markdown на сервер с автоматическим восстановлением после ошибок
+   * Отправляет markdown на сервер с автоматическим восстановлением после ошибок и rate limiting
    */
   private async send(markdown: string): Promise<PublishResponse> {
-    let lastError: unknown = null;
-    
-    // Попытки с экспоненциальной задержкой
-    for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
-      try {
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Request timeout after ${REQUEST_TIMEOUT_MS / 1000} seconds`)), REQUEST_TIMEOUT_MS)
-        );
+    return this.rateLimiter.execute(async () => {
+      let lastError: unknown = null;
+      
+      // Попытки с экспоненциальной задержкой
+      for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+        try {
+          const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Request timeout after ${REQUEST_TIMEOUT_MS / 1000} seconds`)), REQUEST_TIMEOUT_MS)
+          );
 
-        const requestPromise = requestUrl({
-          url: `${this.plugin.settings.apiUrl}/publish`,
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.plugin.settings.apiToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ markdown }),
-        });
+          const requestPromise = requestUrl({
+            url: `${this.plugin.settings.apiUrl}/publish`,
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${this.plugin.settings.apiToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ markdown }),
+          });
 
-        const response = await Promise.race([requestPromise, timeoutPromise]);
+          const response = await Promise.race([requestPromise, timeoutPromise]);
 
-        if (response.status < 200 || response.status >= 300) {
-          throw new Error(`HTTP ${response.status}: ${response.text || 'Unknown error'}`);
+          if (response.status < 200 || response.status >= 300) {
+            throw new Error(`HTTP ${response.status}: ${response.text || 'Unknown error'}`);
+          }
+
+          // Валидация ответа с type guard
+          const result = response.json as unknown;
+          if (!isPublishApiResponse(result)) {
+            console.error('[note2cms] Invalid API response format');
+            throw new Error('Invalid response format from server');
+          }
+
+          // Успешный ответ - возвращаем результат
+          return {
+            success: true,
+            permalink: result.permalink || result.url,
+          };
+        } catch (error: unknown) {
+          lastError = error;
+          console.error(`[note2cms] Publish attempt ${attempt}/${MAX_RETRY_ATTEMPTS} failed:`, error);
+          
+          // Если это последняя попытка, возвращаем ошибку
+          if (attempt === MAX_RETRY_ATTEMPTS) {
+            return { success: false, error: formatError(error) };
+          }
+          
+          // Экспоненциальная задержка перед следующей попыткой
+          const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
-
-        // Валидация ответа
-        const result = response.json as unknown;
-        if (typeof result !== 'object' || result === null) {
-          console.error('[note2cms] Invalid API response: not an object');
-          throw new Error('Invalid response format from server');
-        }
-
-        const typedResult = result as Record<string, unknown>;
-        
-        // Проверка типов полей
-        if (typedResult.permalink !== undefined && typeof typedResult.permalink !== 'string') {
-          console.warn('[note2cms] Invalid permalink type in response');
-        }
-        if (typedResult.url !== undefined && typeof typedResult.url !== 'string') {
-          console.warn('[note2cms] Invalid url type in response');
-        }
-
-        // Успешный ответ - возвращаем результат
-        return {
-          success: true,
-          permalink: typeof typedResult.permalink === 'string' ? typedResult.permalink : (typeof typedResult.url === 'string' ? typedResult.url : undefined),
-        };
-      } catch (error: unknown) {
-        lastError = error;
-        console.error(`[note2cms] Publish attempt ${attempt}/${MAX_RETRY_ATTEMPTS} failed:`, error);
-        
-        // Если это последняя попытка, возвращаем ошибку
-        if (attempt === MAX_RETRY_ATTEMPTS) {
-          return { success: false, error: this.errorMessage(error) };
-        }
-        
-        // Экспоненциальная задержка перед следующей попыткой
-        const delay = RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-        await new Promise(resolve => setTimeout(resolve, delay));
       }
-    }
-    
-    // Fallback (не должен достигаться)
-    return { success: false, error: this.errorMessage(lastError) };
-  }
-
-  private errorMessage(e: unknown): string {
-    if (e instanceof Error) return e.message;
-    if (typeof e === 'string') return e;
-    try {
-      return JSON.stringify(e);
-    } catch {
-      return 'Unknown error';
-    }
+      
+      // Fallback (не должен достигаться)
+      return { success: false, error: formatError(lastError) };
+    });
   }
 }
