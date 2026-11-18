@@ -1,6 +1,8 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type { QueueItem } from './queue';
 import Note2CMSPublisher from './main';
+import { checkForUpdates, installUpdate, UpdateCheckResult } from './updater';
+import { formatError } from './utils';
 
 export interface Note2CMSSettings {
   apiUrl: string;
@@ -92,6 +94,8 @@ class SettingsValidator {
  * Plugin settings tab with validation
  */
 export class Note2CMSSettingTab extends PluginSettingTab {
+  private pendingUpdate: UpdateCheckResult | null = null;
+
   constructor(app: App, private plugin: Note2CMSPublisher) { super(app, plugin); }
 
   display(): void {
@@ -103,6 +107,7 @@ export class Note2CMSSettingTab extends PluginSettingTab {
     this.renderPublishSettings(containerEl);
     this.renderBehaviorSettings(containerEl);
     this.renderQueueSettings(containerEl);
+    this.renderUpdateSettings(containerEl);
   }
 
   private renderHeader(containerEl: HTMLElement): void {
@@ -219,6 +224,60 @@ export class Note2CMSSettingTab extends PluginSettingTab {
 
     new Setting(containerEl).setName('Clear queue').addButton(b => b
       .setButtonText('Clear').onClick(() => { void this.plugin.queueManager.clearQueue(); }));
+  }
+
+  private renderUpdateSettings(containerEl: HTMLElement): void {
+    const currentVersion = this.plugin.manifest.version;
+    const desc = this.pendingUpdate?.hasUpdate
+      ? `Current version: ${currentVersion} (latest: ${this.pendingUpdate.latestVersion})`
+      : `Current version: ${currentVersion}`;
+
+    const setting = new Setting(containerEl)
+      .setName('Plugin updates')
+      .setDesc(desc)
+      .addButton(b => b
+        .setButtonText('Check for updates')
+        .onClick(() => { void this.handleCheckUpdates(); }));
+
+    if (this.pendingUpdate?.hasUpdate) {
+      const updateInfo = this.pendingUpdate;
+      setting.addButton(b => b
+        .setButtonText('Update now')
+        .setCta()
+        .onClick(() => { void this.handleInstallUpdate(updateInfo); }));
+    }
+  }
+
+  private async handleCheckUpdates(): Promise<void> {
+    try {
+      new Notice('Checking for updates...');
+      const result = await checkForUpdates(this.plugin);
+      this.pendingUpdate = result;
+      this.display();
+      if (result.hasUpdate) {
+        new Notice(`Update available: ${result.latestVersion}`);
+      } else {
+        new Notice('Plugin is up to date');
+      }
+    } catch (e: unknown) {
+      new Notice(`Update check failed: ${formatError(e)}`);
+    }
+  }
+
+  private async handleInstallUpdate(release: UpdateCheckResult): Promise<void> {
+    try {
+      new Notice('Installing update...');
+      const reloaded = await installUpdate(this.plugin, release);
+      this.pendingUpdate = null;
+      this.display();
+      if (reloaded) {
+        new Notice(`Updated to ${release.latestVersion}`);
+      } else {
+        new Notice(`Updated to ${release.latestVersion}. Please reload the app.`);
+      }
+    } catch (e: unknown) {
+      new Notice(`Update failed: ${formatError(e)}`);
+    }
   }
 
   /**
