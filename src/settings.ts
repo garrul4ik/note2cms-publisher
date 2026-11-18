@@ -13,6 +13,7 @@ export interface Note2CMSSettings {
   wifiOnly: boolean;
   supportPublishTag: boolean;
   publishTagName: string;
+  uploadImages: boolean;
   frontmatterMode: 'smart_normalize';
   showQuickFixModal: boolean;
   defaultWritebackAction: 'ask' | 'publish_only' | 'publish_and_save';
@@ -29,6 +30,7 @@ export const DEFAULT_SETTINGS: Note2CMSSettings = {
   wifiOnly: false,
   supportPublishTag: true,
   publishTagName: 'publish',
+  uploadImages: true,
   frontmatterMode: 'smart_normalize',
   showQuickFixModal: true,
   defaultWritebackAction: 'ask',
@@ -166,6 +168,15 @@ export class Note2CMSSettingTab extends PluginSettingTab {
       .addText(t => {
         t.setValue(this.plugin.settings.publishTagName)
           .onChange(this.handlePublishTagNameChange);
+        return t;
+      });
+
+    new Setting(containerEl)
+      .setName('Upload attached images')
+      .setDesc('Automatically bundle local images and ![[embeds]] on publish')
+      .addToggle(t => {
+        t.setValue(this.plugin.settings.uploadImages)
+          .onChange((v) => { void this.updateSetting('uploadImages', v); });
         return t;
       });
   }

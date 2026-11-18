@@ -1,4 +1,4 @@
-import { Notice, TFile, requestUrl } from 'obsidian';
+import { Notice, TFile, arrayBufferToBase64, parseYaml, requestUrl } from 'obsidian';
 import Note2CMSPublisher from './main';
 import { runFrontmatterPreflight, type PreflightResult } from './frontmatter-preflight';
 import { showQuickFixModal, type QuickFixAction, type QuickFixResult } from './quick-fix-modal';
@@ -11,6 +11,9 @@ const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 const RATE_LIMIT_MAX_CONCURRENT = 3;
 const RATE_LIMIT_DELAY_MS = 100;
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif']);
+const MD_IMAGE_RE = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+const WIKI_IMAGE_RE = /!\[\[([^\]|]+?)(?:\|[^\]]*)?\]\]/g;
 
 interface PublishOptions {
   interactive?: boolean;
@@ -110,8 +113,10 @@ export class Publisher {
       }
     }
 
-    // Публикуем ПЕРЕД записью в файл
-    const publishResult = await this.send(markdownToPublish);
+    const assets = await this.collectAssets(markdownToPublish, sourcePath);
+
+    // Publish BEFORE writing normalized frontmatter back to the local note
+    const publishResult = await this.send(markdownToPublish, assets);
 
     // Записываем в файл только после успешной публикации
     if (publishResult.success && action === 'publish_and_save') {
@@ -126,6 +131,56 @@ export class Publisher {
    */
   async publishRaw(markdown: string): Promise<PublishResponse> {
     return this.send(markdown);
+  }
+
+  private extractAssetRefs(markdown: string): string[] {
+    const refs = new Set<string>();
+    for (const match of markdown.matchAll(MD_IMAGE_RE)) {
+      refs.add(match[1].trim());
+    }
+    for (const match of markdown.matchAll(WIKI_IMAGE_RE)) {
+      refs.add(match[1].trim());
+    }
+    const fmMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    if (fmMatch) {
+      try {
+        const parsed = parseYaml(fmMatch[1]) as unknown;
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          const cover = (parsed as Record<string, unknown>).cover;
+          if (typeof cover === 'string' && cover.trim().length > 0) {
+            refs.add(cover.trim());
+          }
+        }
+      } catch {
+        // Ignore non-standard frontmatter when scanning cover refs
+      }
+    }
+    return Array.from(refs);
+  }
+
+  private async collectAssets(markdown: string, sourcePath?: string): Promise<Record<string, string>> {
+    const assets: Record<string, string> = {};
+    if (!this.plugin.settings.uploadImages || !sourcePath) {
+      return assets;
+    }
+
+    for (const ref of this.extractAssetRefs(markdown)) {
+      if (/^(https?:|data:|\/posts\/)/i.test(ref)) {
+        continue;
+      }
+      let cleanRef = ref.replace(/^\.\//, '');
+      try {
+        cleanRef = decodeURIComponent(cleanRef);
+      } catch {
+        // Keep literal reference if percent-decoding fails
+      }
+      const linked = this.plugin.app.metadataCache.getFirstLinkpathDest(cleanRef, sourcePath);
+      if (linked instanceof TFile && IMAGE_EXTENSIONS.has(linked.extension.toLowerCase())) {
+        const binary = await this.plugin.app.vault.readBinary(linked);
+        assets[ref] = arrayBufferToBase64(binary);
+      }
+    }
+    return assets;
   }
 
   private async resolveQuickFixAction(
@@ -165,9 +220,13 @@ export class Publisher {
   /**
    * Отправляет markdown на сервер с автоматическим восстановлением после ошибок и rate limiting
    */
-  private async send(markdown: string): Promise<PublishResponse> {
+  private async send(markdown: string, assets?: Record<string, string>): Promise<PublishResponse> {
     return this.rateLimiter.execute(async () => {
       let lastError: unknown = null;
+      const payload: Record<string, unknown> = { markdown };
+      if (assets && Object.keys(assets).length > 0) {
+        payload.assets = assets;
+      }
       
       // Попытки с экспоненциальной задержкой
       for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
@@ -183,7 +242,7 @@ export class Publisher {
               Authorization: `Bearer ${this.plugin.settings.apiToken}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ markdown }),
+            body: JSON.stringify(payload),
           });
 
           const response = await Promise.race([requestPromise, timeoutPromise]);

@@ -1,6 +1,6 @@
 # note2cms Publisher
 
-One-click publishing from Obsidian to note2cms. A secure, performant plugin that works with Leapcell backend and GitHub Pages, supporting both desktop and mobile platforms.
+One-click publishing from Obsidian to note2cms. A secure, performant plugin that works with FastAPI Cloud / Neon backend and GitHub Pages, supporting both desktop and mobile platforms.
 
 ## ✨ Features
 
@@ -81,7 +81,7 @@ For developers or advanced users:
 ### Initial Setup
 1. Open **Settings** → **note2cms Publisher**
 2. Configure required settings:
-   - **API URL**: Your note2cms backend URL (e.g., Leapcell deployment)
+   - **API URL**: Your note2cms backend URL (e.g., FastAPI Cloud deployment: `https://your-backend.fastapicloud.dev`)
    - **API Token**: Authentication token from your backend
 3. Click **Test connection** to verify setup
 
@@ -441,7 +441,7 @@ Contributions are welcome! Please follow these guidelines:
 ### Backend Setup
 The plugin requires a note2cms backend instance:
 - **Repository**: [mortalezz/note2cms](https://github.com/mortalezz/note2cms)
-- **Deployment**: Leapcell, Vercel, or self-hosted
+- **Deployment**: FastAPI Cloud, Neon PostgreSQL, or self-hosted
 - **Environment Variables**:
   - `GITHUB_TOKEN`: For GitHub Pages deployment
   - `GITHUB_REPO`: Target repository for publishing

@@ -53,6 +53,7 @@ export default class Note2CMSPublisher extends Plugin {
     this.addCommand({ id: 'preview-publish', name: 'Preview note', callback: () => this.previewCurrentNote() });
     this.addCommand({ id: 'manage-posts', name: 'Manage published posts', callback: () => new ManagePostsModal(this.app, this).open() });
     this.addCommand({ id: 'note2cms:view-queue', name: 'View queue', callback: () => this.queueManager.showQueueModal() });
+    this.addCommand({ id: 'rebuild-blog', name: 'Rebuild blog', callback: () => { void this.rebuildBlog(); } });
     this.addRibbonIcon('upload', 'Publish', () => { void this.publishCurrentNote(); });
 
     // Сохраняем обработчик для правильной очистки
@@ -239,6 +240,25 @@ export default class Note2CMSPublisher extends Plugin {
     const result = await this.publisher.publishRaw(markdown);
     if (!result.success) throw new Error(result.error || 'Unknown publish error');
     return { permalink: result.permalink };
+  }
+
+  async rebuildBlog(): Promise<void> {
+    try {
+      new Notice('Rebuilding blog...');
+      const res = await requestUrl({
+        url: `${this.settings.apiUrl}/rebuild`,
+        method: 'POST',
+        headers: { Authorization: `Bearer ${this.settings.apiToken}` },
+      });
+      if (res.status < 200 || res.status >= 300) {
+        throw new Error(`Status ${res.status}`);
+      }
+      const data = res.json as { posts?: number } | null;
+      const count = typeof data?.posts === 'number' ? data.posts : 0;
+      new Notice(`Rebuilt ${count} post(s).`);
+    } catch (e: unknown) {
+      new Notice(`Rebuild failed: ${formatError(e)}`);
+    }
   }
 
   private onFileModified(file: TAbstractFile) {

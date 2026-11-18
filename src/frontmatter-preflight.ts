@@ -21,6 +21,11 @@ interface NormalizedCoreFields {
   date?: string;
   slug?: string;
   excerpt?: string;
+  cover?: string;
+  series?: string;
+  series_order?: number;
+  type?: string;
+  carousel?: boolean;
 }
 
 interface FrontmatterParseResult {
@@ -218,6 +223,37 @@ function normalizeCoreFields(
     fields.excerpt = excerptValue;
   }
 
+  const coverValue = normalizeString(parsedFrontmatter?.cover) ?? normalizeString(cacheFrontmatter?.cover);
+  if (coverValue) {
+    fields.cover = coverValue;
+  }
+
+  const seriesValue = normalizeString(parsedFrontmatter?.series) ?? normalizeString(cacheFrontmatter?.series);
+  if (seriesValue) {
+    fields.series = seriesValue;
+  }
+
+  const rawSeriesOrder = parsedFrontmatter?.series_order ?? cacheFrontmatter?.series_order;
+  if (typeof rawSeriesOrder === 'number' && Number.isFinite(rawSeriesOrder)) {
+    fields.series_order = Math.trunc(rawSeriesOrder);
+  } else if (typeof rawSeriesOrder === 'string' && /^\d+$/.test(rawSeriesOrder.trim())) {
+    fields.series_order = Number.parseInt(rawSeriesOrder.trim(), 10);
+  }
+
+  const typeValue = normalizeString(parsedFrontmatter?.type) ?? normalizeString(cacheFrontmatter?.type);
+  if (typeValue) {
+    fields.type = typeValue;
+  }
+
+  const rawCarousel = parsedFrontmatter?.carousel ?? cacheFrontmatter?.carousel;
+  if (typeof rawCarousel === 'boolean') {
+    fields.carousel = rawCarousel;
+  } else if (typeof rawCarousel === 'string') {
+    const lowered = rawCarousel.trim().toLowerCase();
+    if (lowered === 'false') fields.carousel = false;
+    else if (lowered === 'true') fields.carousel = true;
+  }
+
   return { fields, issues };
 }
 
@@ -232,6 +268,11 @@ function buildNormalizedFrontmatter(
     if (normalized.date) minimal.date = normalized.date;
     if (normalized.slug) minimal.slug = normalized.slug;
     if (normalized.excerpt) minimal.excerpt = normalized.excerpt;
+    if (normalized.cover) minimal.cover = normalized.cover;
+    if (normalized.series) minimal.series = normalized.series;
+    if (normalized.series_order !== undefined) minimal.series_order = normalized.series_order;
+    if (normalized.type) minimal.type = normalized.type;
+    if (normalized.carousel !== undefined) minimal.carousel = normalized.carousel;
     return minimal;
   }
 
@@ -242,6 +283,11 @@ function buildNormalizedFrontmatter(
   if (normalized.date) merged.date = normalized.date;
   if (normalized.slug) merged.slug = normalized.slug;
   if (normalized.excerpt) merged.excerpt = normalized.excerpt;
+  if (normalized.cover) merged.cover = normalized.cover;
+  if (normalized.series) merged.series = normalized.series;
+  if (normalized.series_order !== undefined) merged.series_order = normalized.series_order;
+  if (normalized.type) merged.type = normalized.type;
+  if (normalized.carousel !== undefined) merged.carousel = normalized.carousel;
 
   return merged;
 }
